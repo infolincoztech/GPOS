@@ -20,6 +20,7 @@ const MODULE_ROUTES: Record<string, string> = {
   "/dashboard/customers": "CRM_LOYALTY",
   "/dashboard/hr": "HR_PAYROLL",
   "/dashboard/expenses": "POS_BASIC",
+  "/dashboard/finance": "POS_BASIC",
   "/dashboard/reports": "ANALYTICS",
   "/dashboard/users": "POS_BASIC",
 };

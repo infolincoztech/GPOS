@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { getCached, setCached, invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const cacheKey = `tenant:${tenantId}:orders:${searchParams.toString()}`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
@@ -148,7 +153,9 @@ export async function GET(req: NextRequest) {
       prisma.order.count({ where }),
     ]);
 
-    return NextResponse.json({ orders, total, page, limit });
+    const payload = { orders, total, page, limit };
+    setCached(cacheKey, payload, 15000);
+    return NextResponse.json(payload);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -288,6 +295,7 @@ export async function POST(req: NextRequest) {
       return order;
     });
 
+    invalidateTenantCache(tenantId);
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

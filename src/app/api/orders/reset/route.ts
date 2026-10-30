@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
       return updateResult;
     });
 
+    invalidateTenantCache(tenantId);
     return NextResponse.json({ success: true, deletedCount: result.count });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

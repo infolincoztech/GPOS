@@ -22,8 +22,8 @@ import {
 import { toast } from "sonner";
 import axios from "axios";
 
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
-  constructor(props: {children: React.ReactNode}) {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -135,7 +135,7 @@ function POSContent() {
     const monday = new Date(date.setDate(diffToMonday));
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    
+
     const formatDate = (d: Date) => {
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -152,6 +152,7 @@ function POSContent() {
   const getMonthsList = () => {
     const list = [];
     const date = new Date();
+    date.setDate(1);
     for (let i = 0; i < 12; i++) {
       const m = date.getMonth();
       const y = date.getFullYear();
@@ -164,35 +165,39 @@ function POSContent() {
   };
 
   const loadData = async () => {
-    console.log("POS: Starting data load...");
     try {
-      const [pRes, cRes, tRes, catRes, authRes, oRes] = await Promise.all([
+      const [pRes, catRes, authRes] = await Promise.all([
         axios.get("/api/products").catch(e => { console.error("POS: Products fail", e); return { data: [] }; }),
-        axios.get("/api/customers").catch(e => { console.error("POS: Customers fail", e); return { data: [] }; }),
-        axios.get("/api/tables").catch(e => { console.error("POS: Tables fail", e); return { data: [] }; }),
         axios.get("/api/categories").catch(e => { console.error("POS: Categories fail", e); return { data: [] }; }),
         axios.get("/api/auth/me").catch(e => { console.error("POS: Auth fail", e); return { data: {} }; }),
-        axios.get("/api/orders?limit=100").catch(e => { console.error("POS: Orders fail", e); return { data: { orders: [] } }; }),
       ]);
-      
+
       setProducts(Array.isArray(pRes.data) ? pRes.data : []);
-      setCustomers(Array.isArray(cRes.data) ? cRes.data : []);
-      setTables(Array.isArray(tRes.data) ? tRes.data : []);
       setCategories(Array.isArray(catRes.data) ? catRes.data : []);
-      setOrdersLogList(oRes && oRes.data && Array.isArray(oRes.data.orders) ? oRes.data.orders : []);
       if (authRes.data) {
         setCurrentUser(authRes.data);
         setTenantSettings(authRes.data.tenant);
-        
+
         const hasRestaurant = authRes.data.tenant?.modules?.some((tm: any) => tm.module.name === "RESTAURANT_PRO");
         if (hasRestaurant) {
           setOrderType("DINE_IN");
         }
       }
+      setLoading(false);
+
+      // Load secondary data in background without blocking POS UI
+      Promise.all([
+        axios.get("/api/customers").catch(() => ({ data: [] })),
+        axios.get("/api/tables").catch(() => ({ data: [] })),
+        axios.get("/api/orders?limit=100").catch(() => ({ data: { orders: [] } })),
+      ]).then(([cRes, tRes, oRes]) => {
+        setCustomers(Array.isArray(cRes.data) ? cRes.data : []);
+        setTables(Array.isArray(tRes.data) ? tRes.data : []);
+        setOrdersLogList(oRes && oRes.data && Array.isArray(oRes.data.orders) ? oRes.data.orders : []);
+      });
     } catch (err) {
       console.error("POS: Critical load error", err);
       toast.error("POS initialization failed. Check connection.");
-    } finally {
       setLoading(false);
     }
   };
@@ -718,10 +723,10 @@ function POSContent() {
   const addSizeToCart = (product: any, size: any) => {
     const cartId = `${product.id}-${size.sizeName}`;
     const existing = cart.find((item) => item.id === cartId);
-    
+
     // Determine maximum allowed stock
     const maxStock = size.stock !== undefined ? parseInt(size.stock) : product.stock;
-    
+
     if (size.stock !== undefined && parseInt(size.stock) <= 0) {
       return toast.error("Out of stock for this size variant");
     }
@@ -787,12 +792,12 @@ function POSContent() {
     ? Math.min((subtotal * discountVal) / 100, subtotal)
     : Math.min(discountVal, subtotal);
   const taxable = subtotal - discountAmt;
-  
+
   const cashTaxRate = tenantSettings?.cashTaxRate !== undefined ? tenantSettings.cashTaxRate : 16;
   const cardTaxRate = tenantSettings?.cardTaxRate !== undefined ? tenantSettings.cardTaxRate : 5;
   const taxRatePercent = paymentMethod === "CASH" ? cashTaxRate : cardTaxRate;
   const tax = taxable * (taxRatePercent / 100);
-  
+
   const deliveryAmt = orderType === "DELIVERY" ? (parseFloat(deliveryCharges) || 0) : 0;
   const total = taxable + tax + deliveryAmt;
 
@@ -825,15 +830,14 @@ function POSContent() {
       </style></head><body>
         <div class="center large">KITCHEN ORDER</div>
         <div class="center" style="font-size: 15px; font-weight: normal; margin-top: 4px;">
-          ${
-            order.orderType === "DINE_IN" 
-              ? (tableName ? `Dine In - Table: ${tableName}` : "Dine In") 
-              : order.orderType === "TAKEAWAY" 
-              ? "Take Away" 
-              : order.orderType === "DELIVERY" 
-              ? "Delivery" 
-              : order.orderType
-          }
+          ${order.orderType === "DINE_IN"
+        ? (tableName ? `Dine In - Table: ${tableName}` : "Dine In")
+        : order.orderType === "TAKEAWAY"
+          ? "Take Away"
+          : order.orderType === "DELIVERY"
+            ? "Delivery"
+            : order.orderType
+      }
         </div>
         <div class="divider"></div>
         <div>Order #: ${order.orderNumber}</div>
@@ -862,12 +866,12 @@ function POSContent() {
   const triggerKitchenPrint = async (order: any, cartItemsBeforeReset: any[]) => {
     const newItems = cartItemsBeforeReset.map(item => {
       const qtyDiff = item.quantity - (item.originalQuantity || 0);
-      
+
       // Combine notes (e.g. customized choices like flavor/size) and instructions (extra requests)
       let combinedInstructions = item.notes || "";
       if (item.instructions) {
-        combinedInstructions = combinedInstructions 
-          ? `${combinedInstructions} [${item.instructions}]` 
+        combinedInstructions = combinedInstructions
+          ? `${combinedInstructions} [${item.instructions}]`
           : `[${item.instructions}]`;
       }
 
@@ -919,7 +923,7 @@ function POSContent() {
     const activeModuleNames = tenantModuleList.map((tm: any) => typeof tm === "string" ? tm : (tm.module?.name || tm.name || tm.code || tm.moduleId || "")).filter(Boolean);
     const isPharm = activeModuleNames.includes("PHARMACY_SPECIAL");
     const isGymClub = activeModuleNames.includes("GYM_FITNESS_PRO");
-    const hasRestaurant = activeModuleNames.includes("RESTAURANT_PRO") || activeModuleNames.includes("BAKERY_PRO") || (!isPharm && !isGymClub);
+    const hasRestaurant = activeModuleNames.includes("RESTAURANT_PRO") || activeModuleNames.includes("BAKERY_PRO");
 
     if (hasRestaurant) {
       if (orderType === "DINE_IN" && (!selectedTable || selectedTable === "none")) {
@@ -980,10 +984,10 @@ function POSContent() {
         await triggerKitchenPrint(orderData, cart);
       }
 
-      setLastOrder({ 
-        ...orderData, 
-        items: cart, 
-        customer: customers.find((c) => c.id === selectedCustomer) 
+      setLastOrder({
+        ...orderData,
+        items: cart,
+        customer: customers.find((c) => c.id === selectedCustomer)
       });
 
       setCart([]);
@@ -1021,7 +1025,7 @@ function POSContent() {
     const activeModuleNames = tenantModuleList.map((tm: any) => typeof tm === "string" ? tm : (tm.module?.name || tm.name || tm.code || tm.moduleId || "")).filter(Boolean);
     const isPharm = activeModuleNames.includes("PHARMACY_SPECIAL");
     const isGymClub = activeModuleNames.includes("GYM_FITNESS_PRO");
-    const hasRestaurant = activeModuleNames.includes("RESTAURANT_PRO") || activeModuleNames.includes("BAKERY_PRO") || (!isPharm && !isGymClub);
+    const hasRestaurant = activeModuleNames.includes("RESTAURANT_PRO") || activeModuleNames.includes("BAKERY_PRO");
 
     if (hasRestaurant) {
       if (orderType === "DINE_IN" && (!selectedTable || selectedTable === "none")) {
@@ -1082,10 +1086,10 @@ function POSContent() {
         await triggerKitchenPrint(orderData, cart);
       }
 
-      setLastOrder({ 
-        ...orderData, 
-        items: cart, 
-        customer: customers.find((c) => c.id === selectedCustomer) 
+      setLastOrder({
+        ...orderData,
+        items: cart,
+        customer: customers.find((c) => c.id === selectedCustomer)
       });
 
       setCart([]);
@@ -1125,12 +1129,12 @@ function POSContent() {
       toast.error(`Failed to load orders log: ${err.response?.data?.error || err.message}`);
     }
   };
-// Automatically fetch orders log when the Orders Log dialog is opened
-useEffect(() => {
-  if (showOrdersLog) {
-    fetchOrdersLog();
-  }
-}, [showOrdersLog]);
+  // Automatically fetch orders log when the Orders Log dialog is opened
+  useEffect(() => {
+    if (showOrdersLog) {
+      fetchOrdersLog();
+    }
+  }, [showOrdersLog]);
   const handleEditRunningOrder = (order: any) => {
     setEditingOrderId(order.id);
     setOrderType(order.orderType);
@@ -1142,13 +1146,13 @@ useEffect(() => {
     setRiderName(order.riderName || "");
     setSelectedTable(order.tableId || "");
     setSelectedCustomer(order.customerId || "");
-    
+
     // Parse delivery/takeaway customer details from order notes
     if (order.orderType === "DELIVERY" && order.notes) {
       const nameMatch = order.notes.match(/Customer:\s*(.*)/);
       const phoneMatch = order.notes.match(/Phone:\s*(.*)/);
       const addressMatch = order.notes.match(/Address:\s*(.*)/);
-      
+
       setDeliveryCustomerName(nameMatch ? nameMatch[1].trim() : "");
       setDeliveryCustomerPhone(phoneMatch ? phoneMatch[1].trim() : "");
       setDeliveryCustomerAddress(addressMatch ? addressMatch[1].trim() : "");
@@ -1156,7 +1160,7 @@ useEffect(() => {
     } else if (order.orderType === "TAKEAWAY" && order.notes) {
       const nameMatch = order.notes.match(/Customer:\s*(.*)/);
       const phoneMatch = order.notes.match(/Phone:\s*(.*)/);
-      
+
       setDeliveryCustomerName(nameMatch ? nameMatch[1].trim() : "");
       setDeliveryCustomerPhone(phoneMatch ? phoneMatch[1].trim() : "");
       setDeliveryCustomerAddress("");
@@ -1167,11 +1171,11 @@ useEffect(() => {
       setDeliveryCustomerAddress("");
       setDetailsSaved(false);
     }
-    
+
     // Map existing items back into cart correctly
     const mapped = order.items.map((it: any) => {
       const cartId = it.notes ? `${it.productId}-${it.notes}` : it.productId;
-      
+
       let sizeNotes = it.notes || null;
       let instr = "";
       if (it.notes && it.notes.includes("[")) {
@@ -1236,25 +1240,25 @@ useEffect(() => {
       return;
     }
     const businessName = tenantSettings?.name || "Cheesy Bite";
-    
-    const logoHtml = (!hasPharmacy && !isGym && tenantSettings?.logoUrl) 
-      ? `<img src="${tenantSettings.logoUrl}" style="max-width: 80px; max-height: 80px; margin: 0 auto 8px auto; display: block;" alt="Business Logo" />` 
+
+    const logoHtml = (!hasPharmacy && !isGym && tenantSettings?.logoUrl)
+      ? `<img src="${tenantSettings.logoUrl}" style="max-width: 80px; max-height: 80px; margin: 0 auto 8px auto; display: block;" alt="Business Logo" />`
       : "";
-      
-    const titleHtml = (!hasPharmacy && !isGym) 
+
+    const titleHtml = (!hasPharmacy && !isGym)
       ? `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">${businessName}</div>`
       : "";
 
-    const receiptLabel = hasPharmacy 
-      ? "PHARMACY CASH RECEIPT" 
-      : isGym 
-        ? "GYM & FITNESS RECEIPT" 
-        : isBakery 
-          ? "BAKERY & CAFE RECEIPT" 
+    const receiptLabel = hasPharmacy
+      ? "PHARMACY CASH RECEIPT"
+      : isGym
+        ? "GYM & FITNESS RECEIPT"
+        : isBakery
+          ? "BAKERY & CAFE RECEIPT"
           : "CASH RECEIPT";
 
     const tableName = order.tableId ? (tables.find(t => t.id === order.tableId)?.name || "") : "";
-    const tableHtml = (order.orderType === "DINE_IN" && tableName) 
+    const tableHtml = (order.orderType === "DINE_IN" && tableName)
       ? `<div style="border-top: 1px dashed #000000; padding-top: 6px; font-size: 11px; font-weight: bold; text-align: center; margin-bottom: 8px;">TABLE: ${tableName}</div>`
       : "";
 
@@ -1492,7 +1496,7 @@ useEffect(() => {
     // 2. Date Filter
     const orderDate = new Date(ord.createdAt);
     const today = new Date();
-    today.setHours(0,0,0,0);
+    today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const oneWeekAgo = new Date(today);
@@ -1505,7 +1509,7 @@ useEffect(() => {
     } else if (ordersFilterDate === "WEEK") {
       return orderDate >= oneWeekAgo;
     }
-    
+
     return true;
   });
 
@@ -1522,7 +1526,7 @@ useEffect(() => {
   const isBakery = activeModuleNames.includes("BAKERY_PRO");
   const isExplicitRestaurant = activeModuleNames.includes("RESTAURANT_PRO");
 
-  const isRestaurant = isExplicitRestaurant || isBakery || (!hasPharmacy && !isGym);
+  const isRestaurant = isExplicitRestaurant || isBakery;
 
   const filteredProducts = products.filter((p) => {
     if (isGym && (p.type === "SERVICE" || p.name.toLowerCase().includes("membership") || p.name.toLowerCase().includes("plan") || p.name.toLowerCase().includes("admission"))) {
@@ -1532,15 +1536,15 @@ useEffect(() => {
     const pName = String(p.name || "");
     const pBarcode = String(p.barcode || "");
     const pFormula = String(p.formula || "");
-    const matchesSearch = 
-      pName.toLowerCase().includes(String(search || "").toLowerCase()) || 
+    const matchesSearch =
+      pName.toLowerCase().includes(String(search || "").toLowerCase()) ||
       pBarcode.includes(String(search || "")) ||
       (hasPharmacy && pFormula.toLowerCase().includes(String(search || "").toLowerCase()));
-    
+
     if (selectedCategory === "DEALS") {
       return matchesSearch && p.type === "DEAL";
     }
-    
+
     const matchesCategory = selectedCategory === "ALL" || p.categoryId === selectedCategory;
     return matchesSearch && matchesCategory && p.type !== "DEAL";
   });
@@ -1566,21 +1570,21 @@ useEffect(() => {
   }
 
   return (
-    <div className="h-[calc(100vh-100px)] sm:h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-4 sm:gap-6 overflow-hidden relative">
+    <div className="h-[calc(100vh-80px)] sm:h-[calc(100vh-96px)] flex flex-col lg:flex-row gap-4 overflow-hidden relative">
       {/* Left: Products */}
       <div className={cn(
-        "flex-1 flex flex-col min-w-0 bg-white rounded-3xl sm:rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden transition-all",
+        "flex-1 flex flex-col min-w-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-hidden transition-all",
         showMobileCart ? "hidden lg:flex" : "flex"
       )}>
-        <div className="p-4 sm:p-5 border-b border-slate-100 space-y-3 shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 space-y-2.5 shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <LayoutGrid className="w-5 h-5 text-blue-600" /> Products
             </h2>
             <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   fetchOrdersLog();
                   setShowOrdersLog(true);
@@ -1590,7 +1594,6 @@ useEffect(() => {
                 <History className="w-4 h-4 mr-2 text-blue-600" /> Orders Log
               </Button>
               <Button
-                variant="destructive"
                 size="sm"
                 onClick={() => setEodModalOpen(true)}
                 className="h-9 px-4 rounded-xl font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-100 flex items-center gap-1.5"
@@ -1685,8 +1688,8 @@ useEffect(() => {
               <div className={cn(
                 viewMode === "grid"
                   ? (hasPharmacy
-                      ? "grid grid-cols-4 sm:grid-cols-6 xl:grid-cols-8 gap-2"
-                      : "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4")
+                    ? "grid grid-cols-4 sm:grid-cols-6 xl:grid-cols-8 gap-2"
+                    : "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4")
                   : "flex flex-col gap-2"
               )}>
                 {(filteredProducts || []).map((product) => {
@@ -1695,7 +1698,7 @@ useEffect(() => {
                   const totalStock = hasVariants
                     ? sizesList.reduce((acc: number, s: any) => acc + (parseInt(s.stock) || 0), 0)
                     : parseInt(product.stock || 0);
-                  
+
                   return (
                     <motion.div key={product.id} whileTap={{ scale: 0.97 }}
                       onClick={() => addToCart(product)}
@@ -1704,8 +1707,8 @@ useEffect(() => {
                         product.type !== "DEAL" && totalStock <= 0 && "opacity-50 cursor-not-allowed",
                         viewMode === "grid"
                           ? (hasPharmacy
-                              ? "p-2 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-md h-32"
-                              : "p-3 sm:p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50")
+                            ? "p-2 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-md h-32"
+                            : "p-3 sm:p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50")
                           : "p-4 flex items-center justify-between rounded-xl border border-slate-100 hover:border-blue-200"
                       )}>
                       {product.type !== "DEAL" && totalStock <= 5 && totalStock > 0 && (
@@ -1724,7 +1727,7 @@ useEffect(() => {
                           </div>
                         )}
                         <div>
-                          <h3 className={cn("font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 text-left leading-snug", 
+                          <h3 className={cn("font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 text-left leading-snug",
                             hasPharmacy ? "text-[11px] sm:text-xs" : "text-xs sm:text-sm")}>{product.name}</h3>
                           {(viewMode === "list" || hasPharmacy) && (
                             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 text-left line-clamp-1">
@@ -1770,58 +1773,44 @@ useEffect(() => {
 
       {/* Right: Cart */}
       <div className={cn(
-        "w-full lg:w-[400px] flex flex-col bg-white rounded-3xl sm:rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden transition-all",
+        "w-full lg:w-[360px] xl:w-[380px] h-full flex flex-col bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl overflow-hidden transition-all",
         !showMobileCart ? "hidden lg:flex" : "flex absolute inset-0 z-10 lg:relative lg:inset-auto"
       )}>
         {/* Cart Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8 rounded-xl" onClick={() => setShowMobileCart(false)}>
-              <X className="w-5 h-5 text-slate-400" />
+        <div className="px-3.5 py-2 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="lg:hidden h-6 w-6 rounded-lg" onClick={() => setShowMobileCart(false)}>
+              <X className="w-3.5 h-3.5 text-slate-400" />
             </Button>
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-600" /> Cart
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-1.5 leading-none">
+                <ShoppingCart className="w-4 h-4 text-blue-600" /> Cart
               </h2>
-              <p className="text-[10px] text-slate-400 font-black tracking-wider uppercase mt-0.5">Billed By: {currentUser?.name || "Cashier"}</p>
+              <span className="text-[8px] text-slate-400 font-black tracking-wider uppercase truncate max-w-[160px]">
+                {currentUser?.name || "Cashier"}
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-blue-600 text-white rounded-full px-2 h-6 min-w-6 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-1">
+            <Badge className="bg-blue-600 text-white rounded-full px-1.5 h-4 min-w-4 text-[10px] flex items-center justify-center font-bold">
               {cart.reduce((s, i) => s + i.quantity, 0)}
             </Badge>
             {cart.length > 0 && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-slate-400 hover:text-rose-500"
+              <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-400 hover:text-rose-500"
                 onClick={() => setCart([])}>
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3 h-3" />
               </Button>
             )}
           </div>
         </div>
 
-        {/* Customer + Order Type */}
-        <div className="px-4 py-3 border-b border-slate-50 space-y-2 shrink-0">
-          {(!isRestaurant) && (
-            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-sm">
-                <User className="w-4 h-4 mr-2 text-slate-400" />
-                <SelectValue placeholder="Walk-in Customer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Walk-in Customer</SelectItem>
-                {customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name} {c.phone ? `· ${c.phone}` : ""}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
-          {/* Order Type & Tables (Conditional for Restaurant Module) */}
-          {isRestaurant && (
-            <div className="space-y-3">
+        {/* Order Type & Tables (Conditional for Restaurant Module) */}
+        {isRestaurant && (
+          <div className="px-3.5 py-2.5 border-b border-slate-50 space-y-2 shrink-0">
+            <div className="space-y-2">
               <div className="flex bg-slate-100 p-1 rounded-xl">
                 {["DINE_IN", "TAKEAWAY", "DELIVERY"].map((type) => (
-                  <Button 
+                  <Button
                     key={type}
                     variant={orderType === type ? "default" : "ghost"}
                     size="sm"
@@ -1831,7 +1820,7 @@ useEffect(() => {
                       setDetailsSaved(false);
                     }}
                     className={cn(
-                      "flex-1 h-9 rounded-lg font-bold text-[10px] tracking-tight transition-all",
+                      "flex-1 h-8 rounded-lg font-bold text-[10px] tracking-tight transition-all",
                       orderType === type ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:bg-white/50"
                     )}
                   >
@@ -1839,12 +1828,12 @@ useEffect(() => {
                   </Button>
                 ))}
               </div>
-              
+
               {orderType === "DINE_IN" && (
                 <div className="flex gap-2 items-center">
                   <Select value={selectedTable} onValueChange={handleTableSelect}>
-                    <SelectTrigger className="flex-1 h-10 rounded-xl border-slate-200 text-sm">
-                      <Utensils className="w-4 h-4 mr-2 text-slate-400" />
+                    <SelectTrigger className="flex-1 h-9 rounded-xl border-slate-200 text-xs">
+                      <Utensils className="w-3.5 h-3.5 mr-2 text-slate-400" />
                       <SelectValue placeholder="Select Seat/Table" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1867,7 +1856,7 @@ useEffect(() => {
                           setIsRenamingTable(true);
                         }
                       }}
-                      className="h-10 px-3 rounded-xl border-slate-200 bg-white hover:bg-slate-50 transition-all font-black text-xs shrink-0 flex items-center gap-1 text-slate-700"
+                      className="h-9 px-2.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 transition-all font-black text-xs shrink-0 flex items-center gap-1 text-slate-700"
                       title="Rename & Free Table"
                     >
                       ✏️ Rename
@@ -1878,9 +1867,9 @@ useEffect(() => {
 
               {orderType === "TAKEAWAY" && (
                 detailsSaved ? (
-                  <div 
+                  <div
                     onClick={() => setDetailsSaved(false)}
-                    className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl border border-blue-100 shadow-sm cursor-pointer transition-all flex items-center justify-between animate-in fade-in"
+                    className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl border border-blue-100 shadow-sm cursor-pointer transition-all flex items-center justify-between animate-in fade-in"
                   >
                     <div className="text-left flex-1 min-w-0 mr-2">
                       <p className="text-[9px] font-black text-blue-600/70 uppercase tracking-widest leading-none mb-1">Takeaway Customer</p>
@@ -1888,30 +1877,30 @@ useEffect(() => {
                         {deliveryCustomerName || "Guest"} {deliveryCustomerPhone && `• ${deliveryCustomerPhone}`}
                       </p>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-200/50 flex items-center shrink-0">
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-200/50 flex items-center shrink-0">
                       ✏️ Edit
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 p-3.5 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner animate-in slide-in-from-top-2 duration-200">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Takeaway Customer Details</p>
-                    
-                    <Input 
+                  <div className="space-y-2 p-3 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner animate-in slide-in-from-top-2 duration-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Takeaway Customer Details</p>
+
+                    <Input
                       placeholder="Customer Name"
-                      className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                      className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                       value={deliveryCustomerName}
                       onChange={(e) => setDeliveryCustomerName(e.target.value)}
                     />
-                    <Input 
+                    <Input
                       placeholder="Phone Number"
-                      className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                      className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                       value={deliveryCustomerPhone}
                       onChange={(e) => setDeliveryCustomerPhone(e.target.value)}
                     />
-                    <Button 
+                    <Button
                       type="button"
                       onClick={() => setDetailsSaved(true)}
-                      className="w-full h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center mt-1.5 active:scale-95 transition-all"
+                      className="w-full h-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center mt-1 active:scale-95 transition-all"
                     >
                       ✓ Save Details
                     </Button>
@@ -1921,9 +1910,9 @@ useEffect(() => {
 
               {orderType === "DELIVERY" && (
                 detailsSaved ? (
-                  <div 
+                  <div
                     onClick={() => setDetailsSaved(false)}
-                    className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl border border-blue-100 shadow-sm cursor-pointer transition-all flex items-center justify-between animate-in fade-in"
+                    className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl border border-blue-100 shadow-sm cursor-pointer transition-all flex items-center justify-between animate-in fade-in"
                   >
                     <div className="text-left flex-1 min-w-0 mr-2">
                       <p className="text-[9px] font-black text-blue-600/70 uppercase tracking-widest leading-none mb-1">Delivery Customer</p>
@@ -1934,47 +1923,47 @@ useEffect(() => {
                         Address: {deliveryCustomerAddress || "Not specified"}
                       </p>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-200/50 flex items-center shrink-0">
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-200/50 flex items-center shrink-0">
                       ✏️ Edit
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 p-3.5 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner animate-in slide-in-from-top-2 duration-200">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Delivery Customer Details</p>
-                    
-                    <Input 
+                  <div className="space-y-2 p-3 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-inner animate-in slide-in-from-top-2 duration-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Delivery Customer Details</p>
+
+                    <Input
                       placeholder="Customer Name"
-                      className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                      className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                       value={deliveryCustomerName}
                       onChange={(e) => setDeliveryCustomerName(e.target.value)}
                     />
-                    <Input 
+                    <Input
                       placeholder="Phone Number"
-                      className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                      className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                       value={deliveryCustomerPhone}
                       onChange={(e) => setDeliveryCustomerPhone(e.target.value)}
                     />
-                    <Input 
+                    <Input
                       placeholder="Complete Delivery Address"
-                      className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                      className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                       value={deliveryCustomerAddress}
                       onChange={(e) => setDeliveryCustomerAddress(e.target.value)}
                     />
-                    
-                    <div className="pt-2 border-t border-slate-200/60 mt-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Rider Assignment</p>
-                      <Input 
+
+                    <div className="pt-1.5 border-t border-slate-200/60 mt-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Rider Assignment</p>
+                      <Input
                         placeholder="Rider Name / Courier Info"
-                        className="h-10 rounded-xl border-slate-200 text-sm bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
+                        className="h-9 rounded-xl border-slate-200 text-xs bg-white font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal"
                         value={riderName}
                         onChange={(e) => setRiderName(e.target.value)}
                       />
                     </div>
-                    
-                    <Button 
+
+                    <Button
                       type="button"
                       onClick={() => setDetailsSaved(true)}
-                      className="w-full h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center mt-1.5 active:scale-95 transition-all"
+                      className="w-full h-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center mt-1 active:scale-95 transition-all"
                     >
                       ✓ Save Details
                     </Button>
@@ -1982,50 +1971,40 @@ useEffect(() => {
                 )
               )}
             </div>
-          )}
-
-          {!isRestaurant && (
-            <div className="pt-1">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Order Details</p>
-              <div className="mt-2 p-3 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-between">
-                <span className="text-sm font-bold text-blue-700">Retail Sale</span>
-                <Badge className="bg-blue-600 text-white border-none">Active</Badge>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 scroll-left">
-          <div style={{ direction: "ltr" }} className="space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 space-y-2 scroll-left">
+          <div style={{ direction: "ltr" }} className="space-y-2 h-full">
             <AnimatePresence>
               {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-300 space-y-3 py-12" style={{ direction: "ltr" }}>
-                  <ShoppingCart className="w-12 h-12 sm:w-14 sm:h-14 opacity-20" />
-                  <p className="font-bold text-sm">Cart is empty</p>
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 space-y-1.5 py-4" style={{ direction: "ltr" }}>
+                  <ShoppingCart className="w-10 h-10 opacity-20" />
+                  <p className="font-bold text-xs">Cart is empty</p>
                   <p className="text-[10px]">Select products from the left</p>
                 </div>
               ) : (
                 cart.map((item) => (
                   <motion.div key={item.id}
                     initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50/80 border border-slate-100" style={{ direction: "ltr" }}>
+                    className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50/80 border border-slate-100" style={{ direction: "ltr" }}>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 text-sm line-clamp-1">{item.name}</p>
-                      <p className="text-xs font-bold text-blue-600">PKR {(item.price * item.quantity).toFixed(2)}</p>
+                      <p className="font-bold text-slate-900 text-xs line-clamp-1">{item.name}</p>
+                      <p className="text-[11px] font-bold text-blue-600">PKR {(item.price * item.quantity).toFixed(2)}</p>
                     </div>
-                    <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-sm border border-slate-100">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => updateQuantity(item.id, -1)}>
+                    <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 shadow-sm border border-slate-100">
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md" onClick={() => updateQuantity(item.id, -1)}>
                         <Minus className="w-3 h-3" />
                       </Button>
-                      <span className="w-6 text-center font-bold text-slate-900 text-xs">{item.quantity}</span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => updateQuantity(item.id, 1)}>
+                      <span className="w-5 text-center font-bold text-slate-900 text-xs">{item.quantity}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md" onClick={() => updateQuantity(item.id, 1)}>
                         <Plus className="w-3 h-3" />
                       </Button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-rose-400 hover:bg-rose-50"
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-rose-400 hover:bg-rose-50"
                       onClick={() => removeFromCart(item.id)}>
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </motion.div>
                 ))
@@ -2035,134 +2014,134 @@ useEffect(() => {
         </div>
 
         {/* Totals & Checkout */}
-        <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 space-y-3 shrink-0">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm transition-all hover:border-blue-300">
-              <div className="flex bg-slate-100 p-0.5 rounded-xl shrink-0">
-                <Button 
+        <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 space-y-1.5 shrink-0">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm transition-all hover:border-blue-300">
+              <div className="flex bg-slate-100 p-0.5 rounded-md shrink-0">
+                <Button
                   type="button"
-                  variant={discountType === "AMOUNT" ? "default" : "ghost"} 
+                  variant={discountType === "AMOUNT" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => {
                     setDiscountType("AMOUNT");
                     setDiscount("0");
                   }}
                   className={cn(
-                    "h-8 px-3.5 rounded-lg font-black text-xs transition-all duration-200", 
-                    discountType === "AMOUNT" ? "bg-white text-blue-600 shadow-md shadow-blue-100/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                    "h-5 px-2 rounded font-black text-[10px] transition-all duration-200",
+                    discountType === "AMOUNT" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
                   )}
                 >
-                  PKR (Rs.)
+                  PKR
                 </Button>
-                <Button 
+                <Button
                   type="button"
-                  variant={discountType === "PERCENT" ? "default" : "ghost"} 
+                  variant={discountType === "PERCENT" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => {
                     setDiscountType("PERCENT");
                     setDiscount("0");
                   }}
                   className={cn(
-                    "h-8 px-3.5 rounded-lg font-black text-xs transition-all duration-200", 
-                    discountType === "PERCENT" ? "bg-white text-blue-600 shadow-md shadow-blue-100/50" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                    "h-5 px-2 rounded font-black text-[10px] transition-all duration-200",
+                    discountType === "PERCENT" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
                   )}
                 >
                   % Off
                 </Button>
               </div>
               <div className="relative flex-1">
-                <Tag className="absolute left-2.5 top-2.5 w-4 h-4 text-slate-400 transition-colors" />
-                <Input 
-                  type="number" 
-                  min="0" 
+                <Tag className="absolute left-1.5 top-1.5 w-3 h-3 text-slate-400 transition-colors" />
+                <Input
+                  type="number"
+                  min="0"
                   placeholder={discountType === "PERCENT" ? "Enter % (e.g. 10)" : "Enter PKR amount"}
-                  className="pl-9 h-9 rounded-xl border-none bg-transparent text-sm focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0"
-                  value={discount === "0" ? "" : discount} 
-                  onChange={(e) => setDiscount(e.target.value)} 
+                  className="pl-6 h-6 rounded border-none bg-transparent text-[11px] focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0"
+                  value={discount === "0" ? "" : discount}
+                  onChange={(e) => setDiscount(e.target.value)}
                 />
                 {parseFloat(discount) > 0 && (
                   <button
                     type="button"
                     onClick={() => setDiscount("0")}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-rose-500 transition-colors"
+                    className="absolute right-1.5 top-1.5 text-slate-400 hover:text-rose-500 transition-colors"
                     title="Clear discount"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
             </div>
 
             {/* Quick Preset Offers/Discounts */}
-            <div className="flex flex-wrap gap-1.5 items-center pl-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-1 select-none">Offers:</span>
-              <Button 
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider shrink-0 select-none">Offers:</span>
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("PERCENT"); setDiscount("5"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "PERCENT" && discount === "5" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
-                5% Off
+                5%
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("PERCENT"); setDiscount("10"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "PERCENT" && discount === "10" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
-                10% Off
+                10%
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("PERCENT"); setDiscount("15"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "PERCENT" && discount === "15" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
-                15% Off
+                15%
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("PERCENT"); setDiscount("20"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "PERCENT" && discount === "20" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
-                20% Off
+                20%
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("AMOUNT"); setDiscount("100"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "AMOUNT" && discount === "100" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
                 Rs 100
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 onClick={() => { setDiscountType("AMOUNT"); setDiscount("500"); }}
                 className={cn(
-                  "h-6 px-2.5 rounded-lg text-[10px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95",
+                  "h-4 px-1.5 rounded text-[8.5px] font-black transition-all border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 active:scale-95 shrink-0",
                   discountType === "AMOUNT" && discount === "500" && "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
                 )}
               >
@@ -2171,33 +2150,35 @@ useEffect(() => {
             </div>
             {/* Delivery Charges (Custom Input) */}
             {orderType === "DELIVERY" && (
-              <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all mt-2">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider pl-2 shrink-0">Rider Charges:</span>
-                <Input 
-                  type="number" 
-                  min="0" 
-                  placeholder="Delivery Charges (e.g. 150)" 
-                  className="h-8 border-none bg-transparent text-sm focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                  value={deliveryCharges} 
-                  onChange={(e) => setDeliveryCharges(e.target.value)} 
+              <div className="flex items-center gap-2 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition-all">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Rider Charges:</span>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="Delivery Charges (e.g. 150)"
+                  className="h-6 border-none bg-transparent text-[11px] focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  value={deliveryCharges}
+                  onChange={(e) => setDeliveryCharges(e.target.value)}
                 />
               </div>
             )}
 
-            {/* Special Instructions (Optional) */}
-            <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all mt-2">
-              <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider pl-2 shrink-0">Instruction:</span>
-              <Input 
-                type="text" 
-                placeholder="Special instructions (e.g. topping, extra spicy)" 
-                className="h-8 border-none bg-transparent text-sm focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                value={specialInstructions} 
-                onChange={(e) => setSpecialInstructions(e.target.value)} 
-              />
-            </div>
+            {/* Special Instructions (Optional for Restaurant) */}
+            {isRestaurant && (
+              <div className="flex items-center gap-2 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition-all">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Instruction:</span>
+                <Input
+                  type="text"
+                  placeholder="Special instructions (e.g. topping, extra spicy)"
+                  className="h-6 border-none bg-transparent text-[11px] focus:ring-0 font-bold text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1 text-sm font-medium">
+          <div className="space-y-0.5 text-[11px] font-medium leading-tight">
             <div className="flex justify-between text-slate-500">
               <span>Subtotal</span><span>PKR {subtotal.toFixed(2)}</span>
             </div>
@@ -2209,45 +2190,45 @@ useEffect(() => {
             <div className="flex justify-between text-slate-500">
               <span>Tax ({paymentMethod === "CASH" ? `${cashTaxRate}%` : `${cardTaxRate}%`})</span><span>PKR {tax.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-lg sm:text-xl font-black text-slate-900 pt-2 border-t border-slate-200">
+            <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
               <span>Total</span><span>PKR {total.toFixed(2)}</span>
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            <div className="flex bg-slate-200/50 p-1 rounded-xl">
+          <div className="space-y-1.5 pt-0.5">
+            <div className="flex bg-slate-200/50 p-0.5 rounded-lg">
               <Button variant={paymentMethod === "CASH" ? "default" : "ghost"} size="sm"
                 onClick={() => setPaymentMethod("CASH")}
-                className={cn("flex-1 h-9 rounded-lg font-bold text-xs flex items-center justify-center", paymentMethod === "CASH" && "bg-white text-slate-900 shadow-sm")}>
-                <Banknote className="w-4 h-4 mr-2 text-emerald-600" /> Cash ({cashTaxRate}%)
+                className={cn("flex-1 h-7 rounded-md font-bold text-[11px] flex items-center justify-center", paymentMethod === "CASH" && "bg-white text-slate-900 shadow-sm")}>
+                <Banknote className="w-3 h-3 mr-1 text-emerald-600" /> Cash ({cashTaxRate}%)
               </Button>
               <Button variant={paymentMethod === "CARD" ? "default" : "ghost"} size="sm"
                 onClick={() => setPaymentMethod("CARD")}
-                className={cn("flex-1 h-9 rounded-lg font-bold text-xs flex items-center justify-center", paymentMethod === "CARD" && "bg-white text-slate-900 shadow-sm")}>
-                <CreditCard className="w-4 h-4 mr-2 text-blue-600" /> Card ({cardTaxRate}%)
+                className={cn("flex-1 h-7 rounded-md font-bold text-[11px] flex items-center justify-center", paymentMethod === "CARD" && "bg-white text-slate-900 shadow-sm")}>
+                <CreditCard className="w-3 h-3 mr-1 text-blue-600" /> Card ({cardTaxRate}%)
               </Button>
             </div>
-            
+
             {editingOrderId ? (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {isRestaurant ? (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Button disabled={isProcessing || cart.length === 0} onClick={() => handleUpdateOrder(true)}
-                      className="flex-grow h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1">
+                      className="flex-grow h-8 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                       Update Running
                     </Button>
                     <Button disabled={isProcessing || cart.length === 0} onClick={() => handleUpdateOrder(false)}
-                      className="flex-grow h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-1">
+                      className="flex-grow h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                       Pay & Complete
                     </Button>
                   </div>
                 ) : (
                   <Button disabled={isProcessing || cart.length === 0} onClick={() => handleUpdateOrder(false)}
-                    className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-1">
+                    className="w-full h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                     Pay & Complete
                   </Button>
                 )}
-                <Button 
+                <Button
                   onClick={() => {
                     setEditingOrderId(null);
                     setCart([]);
@@ -2260,27 +2241,27 @@ useEffect(() => {
                     setSelectedTable("");
                     setSelectedCustomer("");
                     toast.info("Cleared editing mode.");
-                  }} 
-                  className="w-full h-10 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs"
+                  }}
+                  className="w-full h-7 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px]"
                 >
                   Cancel Edit Mode
                 </Button>
               </div>
             ) : (
               isRestaurant ? (
-                <div className="flex gap-2.5">
+                <div className="flex gap-1.5">
                   <Button disabled={isProcessing || cart.length === 0} onClick={() => handleCheckout(true)}
-                    className="flex-1 h-12 sm:h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-100 flex items-center justify-center gap-1">
+                    className="flex-1 h-8 sm:h-9 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                     Send to Kitchen
                   </Button>
                   <Button disabled={isProcessing || cart.length === 0} onClick={() => handleCheckout(false)}
-                    className="flex-1 h-12 sm:h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-100 flex items-center justify-center gap-1">
+                    className="flex-1 h-8 sm:h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                     Pay & Complete
                   </Button>
                 </div>
               ) : (
                 <Button disabled={isProcessing || cart.length === 0} onClick={() => handleCheckout(false)}
-                  className="w-full h-12 sm:h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-100 flex items-center justify-center gap-1">
+                  className="w-full h-8 sm:h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider shadow-sm flex items-center justify-center gap-1">
                   Pay & Complete
                 </Button>
               )
@@ -2291,11 +2272,11 @@ useEffect(() => {
 
       {/* Floating Cart Button for Mobile */}
       {!showMobileCart && cart.length > 0 && (
-        <motion.div 
+        <motion.div
           initial={{ y: 100 }} animate={{ y: 0 }}
           className="fixed bottom-6 right-6 lg:hidden z-20"
         >
-          <Button 
+          <Button
             onClick={() => setShowMobileCart(true)}
             className="h-14 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xl shadow-blue-200 flex items-center gap-3"
           >
@@ -2326,7 +2307,7 @@ useEffect(() => {
                 {(() => {
                   const sizesList = selectedSizingProduct.sizes ? (typeof selectedSizingProduct.sizes === "string" ? JSON.parse(selectedSizingProduct.sizes) : selectedSizingProduct.sizes) : [];
                   return sizesList.map((sz: any, idx: number) => (
-                    <Button 
+                    <Button
                       key={idx}
                       variant="outline"
                       disabled={sz.stock !== undefined && parseInt(sz.stock) <= 0}
@@ -2351,8 +2332,8 @@ useEffect(() => {
                   ));
                 })()}
               </div>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setSelectedSizingProduct(null)}
                 className="w-full h-12 rounded-xl text-slate-500 font-bold hover:bg-slate-50"
               >
@@ -2371,14 +2352,14 @@ useEffect(() => {
             <p className="text-xs text-slate-500 mt-1">Change name of table to free it up immediately (like pending/freeing table in iPOS).</p>
           </DialogHeader>
           <div className="space-y-4 my-2">
-            <Input 
-              value={newTableName} 
-              onChange={(e) => setNewTableName(e.target.value)} 
-              placeholder="Enter new table name" 
+            <Input
+              value={newTableName}
+              onChange={(e) => setNewTableName(e.target.value)}
+              placeholder="Enter new table name"
               className="h-12 rounded-xl"
             />
             <div className="flex gap-2">
-              <Button 
+              <Button
                 onClick={async () => {
                   if (!newTableName.trim()) return toast.error("Table name cannot be empty");
                   try {
@@ -2398,8 +2379,8 @@ useEffect(() => {
               >
                 Save & Free Table
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setIsRenamingTable(false)}
                 className="h-11 rounded-xl font-bold"
               >
@@ -2444,7 +2425,7 @@ useEffect(() => {
                     <label className="text-xs font-black text-slate-700 block">
                       Choose Size for {di.product?.name} (Qty: {di.quantity})
                     </label>
-                    <select 
+                    <select
                       className="w-full h-10 rounded-xl bg-white border border-slate-200 px-3 focus:border-blue-500 transition-all outline-none font-bold text-xs cursor-pointer text-slate-800"
                       value={dealSelections[di.product.id] || ""}
                       onChange={(e) => setDealSelections({ ...dealSelections, [di.product.id]: e.target.value })}
@@ -2475,7 +2456,7 @@ useEffect(() => {
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       {/* Product Selector */}
-                      <select 
+                      <select
                         className="w-full h-10 rounded-xl bg-white border border-slate-200 px-3 focus:border-blue-500 transition-all outline-none font-bold text-xs cursor-pointer text-slate-800"
                         value={selectedProdId}
                         onChange={(e) => {
@@ -2500,7 +2481,7 @@ useEffect(() => {
                       </select>
 
                       {/* Size Selector */}
-                      <select 
+                      <select
                         className="w-full h-10 rounded-xl bg-white border border-slate-200 px-3 focus:border-blue-500 transition-all outline-none font-bold text-xs cursor-pointer text-slate-800 disabled:opacity-50"
                         value={dealSelections[di.id + "_size"] || ""}
                         onChange={(e) => setDealSelections({ ...dealSelections, [di.id + "_size"]: e.target.value })}
@@ -2525,7 +2506,7 @@ useEffect(() => {
           </div>
 
           <div className="flex gap-3 pt-3">
-            <Button 
+            <Button
               onClick={() => {
                 const selectionNotes = customizingDealProduct.dealItems.map((di: any) => {
                   if (di.productId) {
@@ -2570,7 +2551,7 @@ useEffect(() => {
             >
               ✓ Add Combo
             </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setCustomizingDealProduct(null)}
               className="flex-1 h-11 rounded-xl font-bold border-slate-200 hover:bg-slate-50 text-xs"
@@ -2602,7 +2583,7 @@ useEffect(() => {
                 { label: "Completed", value: "COMPLETED" },
                 { label: "Cancelled", value: "CANCELLED" },
               ].map((t) => (
-                <Button 
+                <Button
                   key={t.value}
                   variant={ordersFilterStatus === t.value ? "default" : "ghost"}
                   size="sm"
@@ -2621,7 +2602,7 @@ useEffect(() => {
                 { label: "Last 7 Days", value: "WEEK" },
                 { label: "All", value: "ALL" },
               ].map((d) => (
-                <Button 
+                <Button
                   key={d.value}
                   variant={ordersFilterDate === d.value ? "default" : "ghost"}
                   size="sm"
@@ -2764,10 +2745,10 @@ useEffect(() => {
                     <div style={{ textAlign: "center", marginBottom: "12px" }}>
                       <div style={{ fontSize: "10px", color: "#000000", lineHeight: "1.4", fontWeight: "bold" }}>
                         {(!hasPharmacy && !isGym) && tenantSettings?.logoUrl && (
-                          <img 
-                            src={tenantSettings.logoUrl} 
-                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block" }} 
-                            alt="Business Logo" 
+                          <img
+                            src={tenantSettings.logoUrl}
+                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block" }}
+                            alt="Business Logo"
                           />
                         )}
                         {(!hasPharmacy && !isGym) && (
@@ -2776,18 +2757,18 @@ useEffect(() => {
                           </div>
                         )}
                         <div style={{ fontWeight: "bold", fontSize: "11px", marginBottom: "6px", textTransform: "uppercase" }}>
-                          {hasPharmacy 
-                            ? "PHARMACY CASH RECEIPT" 
-                            : isGym 
-                              ? "GYM & FITNESS RECEIPT" 
-                              : isBakery 
-                                ? "BAKERY & CAFE RECEIPT" 
+                          {hasPharmacy
+                            ? "PHARMACY CASH RECEIPT"
+                            : isGym
+                              ? "GYM & FITNESS RECEIPT"
+                              : isBakery
+                                ? "BAKERY & CAFE RECEIPT"
                                 : "RECEIPT"}
                         </div>
-                        Date: {new Date(lastOrder.createdAt || Date.now()).toLocaleString()}<br/>
-                        Order #: {lastOrder.orderNumber}<br/>
-                        Type: <span style={{ fontWeight: "bold" }}>{lastOrder.orderType.replace("_", " ")}</span><br/>
-                        Payment: <span style={{ fontWeight: "bold" }}>{(lastOrder.paymentStatus || lastOrder.status === "COMPLETED" ? "PAID" : "PENDING")}</span><br/>
+                        Date: {new Date(lastOrder.createdAt || Date.now()).toLocaleString()}<br />
+                        Order #: {lastOrder.orderNumber}<br />
+                        Type: <span style={{ fontWeight: "bold" }}>{lastOrder.orderType.replace("_", " ")}</span><br />
+                        Payment: <span style={{ fontWeight: "bold" }}>{(lastOrder.paymentStatus || lastOrder.status === "COMPLETED" ? "PAID" : "PENDING")}</span><br />
                         Cashier: <span style={{ fontWeight: "bold" }}>{currentUser?.name || "Cashier"}</span>
                       </div>
                     </div>
@@ -2799,15 +2780,15 @@ useEffect(() => {
                     )}
 
                     <div style={{ borderTop: "1px dashed #000000", margin: "8px 0" }}></div>
-                    
+
                     <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "11px" }}>
                       <span style={{ width: "50%", textAlign: "left" }}>Item</span>
                       <span style={{ width: "25%", textAlign: "center" }}>Qty</span>
                       <span style={{ width: "25%", textAlign: "right" }}>Total</span>
                     </div>
-                    
+
                     <div style={{ borderTop: "1px dashed #000000", margin: "8px 0" }}></div>
-                    
+
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       {lastOrder.items?.map((item: any) => {
                         const prodObj = products.find(p => p.id === (item.productId || item.id));
@@ -2828,27 +2809,27 @@ useEffect(() => {
                         );
                       })}
                     </div>
-                    
+
                     <div style={{ borderTop: "1px dashed #000000", margin: "8px 0" }}></div>
-                    
+
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "10px", fontWeight: "bold", textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal:</span><span>{(lastOrder.totalAmount - lastOrder.tax - (lastOrder.deliveryCharges || 0) + lastOrder.discount).toFixed(2)}</span></div>
                       {lastOrder.discount > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}><span>Discount:</span><span>-{lastOrder.discount.toFixed(2)}</span></div>}
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span>Tax:</span><span>{lastOrder.tax.toFixed(2)}</span></div>
                       {lastOrder.deliveryCharges > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Delivery Charges:</span><span>{lastOrder.deliveryCharges.toFixed(2)}</span></div>}
                     </div>
-                    
+
                     <div style={{ borderTop: "1px dashed #000000", margin: "8px 0" }}></div>
-     
+
                     <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "950", fontSize: "14px" }}>
                       <span>TOTAL:</span><span>PKR {lastOrder.totalAmount.toFixed(2)}</span>
                     </div>
-                    
+
                     {lastOrder.specialInstructions && (
                       <>
                         <div style={{ borderTop: "1px dashed #000000", margin: "8px 0" }}></div>
                         <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "left" }}>
-                          SPECIAL INSTRUCTION:<br/>
+                          SPECIAL INSTRUCTION:<br />
                           <span style={{ fontSize: "11px" }}>{lastOrder.specialInstructions}</span>
                         </div>
                       </>
@@ -2866,7 +2847,7 @@ useEffect(() => {
                         )}
                       </div>
                     )}
-                    
+
                     {lastOrder.orderType === "TAKEAWAY" && lastOrder.notes && (
                       <div style={{ borderTop: "1px dashed #000000", paddingTop: "6px", fontSize: "10px", textAlign: "left", marginBottom: "8px" }}>
                         <div style={{ fontWeight: "bold", fontSize: "8px", color: "#555555", textTransform: "uppercase", letterSpacing: "0.05em" }}>TAKEAWAY CUSTOMER:</div>
@@ -2915,12 +2896,12 @@ useEffect(() => {
 
                     <div style={{ textAlign: "center", paddingTop: "12px", fontSize: "10px", fontWeight: "bold" }}>
                       <p style={{ fontWeight: "bold", margin: "0" }}>
-                        {hasPharmacy 
-                          ? "GET WELL SOON!" 
-                          : isGym 
-                            ? "STAY FIT, STAY HEALTHY!" 
-                            : isBakery 
-                              ? "THANK YOU FOR SWEETENING YOUR DAY!" 
+                        {hasPharmacy
+                          ? "GET WELL SOON!"
+                          : isGym
+                            ? "STAY FIT, STAY HEALTHY!"
+                            : isBakery
+                              ? "THANK YOU FOR SWEETENING YOUR DAY!"
                               : "THANK YOU FOR YOUR VISIT"}
                       </p>
                       {hasPharmacy && (
@@ -2960,7 +2941,7 @@ useEffect(() => {
           </div>
         </DialogContent>
       </Dialog>
-      
+
       {/* Printer Setup Modal */}
       <Dialog open={printerSetupOpen} onOpenChange={setPrinterSetupOpen}>
         <DialogContent className="sm:max-w-[400px] rounded-[2rem] p-6 bg-white border-none shadow-2xl">
@@ -2972,34 +2953,34 @@ useEffect(() => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="font-bold text-slate-700">Cashier Printer IP</Label>
-              <Input 
-                className="h-11 rounded-xl bg-slate-50 border-slate-100" 
-                placeholder="e.g. 192.168.1.100" 
-                value={localCashierIp} 
-                onChange={(e) => setLocalCashierIp(e.target.value)} 
+              <Input
+                className="h-11 rounded-xl bg-slate-50 border-slate-100"
+                placeholder="e.g. 192.168.1.100"
+                value={localCashierIp}
+                onChange={(e) => setLocalCashierIp(e.target.value)}
               />
               <p className="text-[10px] text-slate-400 font-medium">Leave empty to use browser print dialog.</p>
             </div>
             <div className="space-y-2">
               <Label className="font-bold text-slate-700">Kitchen Printer IP</Label>
-              <Input 
-                className="h-11 rounded-xl bg-slate-50 border-slate-100" 
-                placeholder="e.g. 192.168.1.101" 
-                value={localKitchenIp} 
-                onChange={(e) => setLocalKitchenIp(e.target.value)} 
+              <Input
+                className="h-11 rounded-xl bg-slate-50 border-slate-100"
+                placeholder="e.g. 192.168.1.101"
+                value={localKitchenIp}
+                onChange={(e) => setLocalKitchenIp(e.target.value)}
               />
               <p className="text-[10px] text-slate-400 font-medium">Leave empty to use browser print dialog.</p>
             </div>
             <div className="flex gap-2 pt-2">
-              <Button 
-                onClick={handleSavePrinters} 
+              <Button
+                onClick={handleSavePrinters}
                 className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 font-bold text-white shadow-lg shadow-blue-100 transition-all active:scale-95"
               >
                 Save Settings
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setPrinterSetupOpen(false)} 
+              <Button
+                variant="outline"
+                onClick={() => setPrinterSetupOpen(false)}
                 className="flex-1 h-11 rounded-xl border-slate-200 font-bold"
               >
                 Cancel
@@ -3119,8 +3100,8 @@ useEffect(() => {
                     <p className="text-sm text-blue-700 font-medium mt-0.5">
                       You are viewing historical closing records for {
                         eodReportPeriod === "daily" ? `date: ${eodDateFilter}` :
-                        eodReportPeriod === "weekly" ? `week: ${getWeekRange(eodWeekDateFilter).label}` :
-                        `month: ${eodMonthFilter}`
+                          eodReportPeriod === "weekly" ? `week: ${getWeekRange(eodWeekDateFilter).label}` :
+                            `month: ${eodMonthFilter}`
                       }. Active session sales are not affected.
                     </p>
                   </div>

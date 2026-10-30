@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireTenantUser } from "@/lib/auth";
+import { invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest) {
       return purchase;
     });
 
+    invalidateTenantCache(user.tenantId);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("POST Purchase Error:", error);

@@ -822,6 +822,7 @@ export default function OrdersPage() {
   const getMonthsList = () => {
     const list = [];
     const date = new Date();
+    date.setDate(1);
     for (let i = 0; i < 12; i++) {
       const m = date.getMonth();
       const y = date.getFullYear();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -359,6 +360,7 @@ export async function PATCH(
       return updatedOrder;
     });
 
+    invalidateTenantCache(tenantId);
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -401,6 +403,7 @@ export async function DELETE(
       await tx.order.delete({ where: { id } });
     });
 
+    invalidateTenantCache(tenantId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

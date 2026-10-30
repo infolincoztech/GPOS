@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import prisma from "@/lib/prisma";
+import { getCached, setCached } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,37 +16,53 @@ export async function GET(req: NextRequest) {
     }
 
     const decoded: any = jwt.verify(token, JWT_SECRET);
-    
+    const cacheKey = `user:${decoded.id}`;
+    const cachedUser = getCached<any>(cacheKey);
+
+    if (cachedUser) {
+      return NextResponse.json({
+        ...cachedUser,
+        isImpersonated: Boolean(decoded.isImpersonated),
+        impersonatorEmail: decoded.impersonatorEmail || null,
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      include: { 
+      include: {
         tenant: {
           include: {
             modules: {
               include: {
-                module: true
-              }
+                module: true,
+              },
             },
             subscription: {
               include: {
-                plan: true
-              }
-            }
-          }
-        }
-      }
+                plan: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
+    const userPayload = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
       tenant: user.tenant,
+    };
+
+    setCached(cacheKey, userPayload, 60000);
+
+    return NextResponse.json({
+      ...userPayload,
       isImpersonated: Boolean(decoded.isImpersonated),
       impersonatorEmail: decoded.impersonatorEmail || null,
     });

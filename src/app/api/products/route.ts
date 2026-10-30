@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import jwt from "jsonwebtoken";
 import { requireTenantUser } from "@/lib/auth";
+import { getCached, setCached, invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
-
-const JWT_SECRET = process.env.JWT_SECRET || "licoz_pos_jwt_super_secret_2026_xK9mP3qR7vN2wL8";
 
 export async function GET(req: NextRequest) {
   try {
     const user = requireTenantUser(req);
     if (!user) {
-      console.warn("GET Products: Unauthorized access attempt");
       return NextResponse.json({ error: "Unauthorized: Please log in again." }, { status: 401 });
+    }
+
+    const cacheKey = `tenant:${user.tenantId}:products`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const products = await prisma.product.findMany({
@@ -29,16 +32,20 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      orderBy: { name: "asc" }
+      orderBy: { name: "asc" },
     });
 
+    setCached(cacheKey, products, 30000);
     return NextResponse.json(products);
   } catch (error: any) {
     console.error("GET Products Critical Error:", error);
-    return NextResponse.json({
-      error: "Database error while fetching products.",
-      details: error.message
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Database error while fetching products.",
+        details: error.message,
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -50,14 +57,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, price, categoryId, sku, barcode, stock, image, sizes, formula, type, unit } = body;
 
-    // Validate required fields
     if (!name) {
       return NextResponse.json({ error: "Product name is required." }, { status: 400 });
     }
-    const hasSizes = sizes !== undefined && sizes !== null && sizes !== "" && !(Array.isArray(sizes) && sizes.length === 0);
+    const hasSizes =
+      sizes !== undefined &&
+      sizes !== null &&
+      sizes !== "" &&
+      !(Array.isArray(sizes) && sizes.length === 0);
     const parsedSizes = hasSizes ? (typeof sizes === "string" ? JSON.parse(sizes) : sizes) : null;
 
-    // If sizes are not provided, price and stock become required
     if (!hasSizes) {
       if (price === undefined || price === "" || price === null) {
         return NextResponse.json({ error: "Price is required when sizes are not provided." }, { status: 400 });
@@ -77,7 +86,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build data payload
     const data: any = {
       name,
       price: computedPrice,
@@ -99,6 +107,7 @@ export async function POST(req: NextRequest) {
       include: { category: true },
     });
 
+    invalidateTenantCache(user.tenantId);
     return NextResponse.json(product);
   } catch (error: any) {
     console.error("POST Product Error:", error);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { getCached, setCached, invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,10 @@ export async function GET(req: NextRequest) {
   const { tenantId } = decoded;
 
   try {
+    const cacheKey = `tenant:${tenantId}:customers`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const customers = await prisma.customer.findMany({
       where: { tenantId },
       include: {
@@ -40,6 +45,7 @@ export async function GET(req: NextRequest) {
       orderCount: c._count.orders,
     }));
 
+    setCached(cacheKey, enriched, 30000);
     return NextResponse.json(enriched);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -59,6 +65,7 @@ export async function POST(req: NextRequest) {
       data: { name, phone, email, tenantId },
     });
 
+    invalidateTenantCache(tenantId);
     return NextResponse.json(customer);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

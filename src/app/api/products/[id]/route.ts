@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       include: { category: true },
     });
 
+    invalidateTenantCache(decoded.tenantId);
     return NextResponse.json(product);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -72,15 +74,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params;
   try {
-    // Find any variants of this product so we can delete their related records too
     const variants = await prisma.product.findMany({
       where: { parentId: id },
-      select: { id: true }
+      select: { id: true },
     });
-    const variantIds = variants.map(v => v.id);
+    const variantIds = variants.map((v) => v.id);
     const allIds = [id, ...variantIds];
 
-    // Use transaction to delete related records to avoid foreign key constraints
     await prisma.$transaction([
       prisma.orderItem.deleteMany({ where: { productId: { in: allIds } } }),
       prisma.stockMovement.deleteMany({ where: { productId: { in: allIds } } }),
@@ -91,8 +91,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       prisma.product.deleteMany({ where: { parentId: id } }),
       prisma.product.delete({
         where: { id, tenantId: decoded.tenantId },
-      })
+      }),
     ]);
+
+    invalidateTenantCache(decoded.tenantId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

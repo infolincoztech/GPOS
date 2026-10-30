@@ -13,7 +13,8 @@ import {
   Shield, 
   Package, 
   CreditCard,
-  Bell
+  Bell,
+  PanelLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -126,14 +127,21 @@ export default function SuperAdminLayout({
         {/* Header */}
         <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between z-20 shrink-0">
           <div className="flex items-center gap-3">
-            {/* Mobile Toggle */}
-            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} className="lg:hidden text-slate-500">
-              <Menu className="w-6 h-6" />
-            </Button>
-            
-            {/* Desktop Toggle */}
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!isSidebarOpen)} className="hidden lg:flex text-slate-500">
-              {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {/* Single Sidebar Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                  setMobileOpen(!isMobileOpen);
+                } else {
+                  setSidebarOpen(!isSidebarOpen);
+                }
+              }}
+              className="h-9 w-9 text-slate-500 rounded-xl hover:bg-slate-50"
+              title="Toggle Sidebar"
+            >
+              <PanelLeft className="w-5 h-5" />
             </Button>
 
             <h2 className="font-bold text-slate-800 text-lg sm:text-xl hidden sm:block">

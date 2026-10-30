@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { setCached } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +36,7 @@ export async function POST(req: NextRequest) {
 
     // Master Super Admin Handling
     if (!user && email.toLowerCase() === MASTER_SUPER_ADMIN_EMAIL.toLowerCase()) {
-      // Verify master password
       if (password === MASTER_SUPER_ADMIN_PASS) {
-        // Ensure super admin exists; create if not present
         const hashed = await bcrypt.hash(MASTER_SUPER_ADMIN_PASS, 10);
         user = await prisma.user.create({
           data: {
@@ -57,7 +56,6 @@ export async function POST(req: NextRequest) {
           },
         });
       } else {
-        // Incorrect master password
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
     }
@@ -84,7 +82,6 @@ export async function POST(req: NextRequest) {
       // Check subscription expiry
       const sub = user.tenant.subscription;
       if (sub && new Date(sub.endDate) < new Date()) {
-        // Auto-mark subscription as EXPIRED
         await prisma.subscription.update({
           where: { id: sub.id },
           data: { status: "EXPIRED" },
@@ -109,14 +106,19 @@ export async function POST(req: NextRequest) {
       { expiresIn: "1d" }
     );
 
+    const userPayload = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      tenant: user.tenant,
+    };
+
+    // Cache user profile so immediate post-login /api/auth/me calls return in <5ms
+    setCached(`user:${user.id}`, userPayload, 60000);
+
     const response = NextResponse.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        tenant: user.tenant,
-      },
+      user: userPayload,
     });
 
     response.cookies.set("token", token, {

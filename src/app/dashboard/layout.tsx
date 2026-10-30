@@ -22,7 +22,9 @@ import {
   Briefcase,
   Receipt,
   Pill,
-  Dumbbell
+  Dumbbell,
+  PanelLeft,
+  Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,7 @@ const sidebarItems = [
   { icon: Dumbbell, label: "Gym & Fitness", href: "/dashboard/gym", moduleId: "GYM_FITNESS_PRO" },
   { icon: Users, label: "Customers", href: "/dashboard/customers", moduleId: "CRM_LOYALTY" },
   { icon: UserCog, label: "Staff", href: "/dashboard/users", moduleId: "POS_BASIC" },
+  { icon: Wallet, label: "Finance", href: "/dashboard/finance", moduleId: "POS_BASIC" },
   { icon: Receipt, label: "Expenses", href: "/dashboard/expenses", moduleId: "POS_BASIC" },
   { icon: BarChart3, label: "Reports", href: "/dashboard/reports", moduleId: "ANALYTICS_AI" },
   { icon: Pill, label: "Medical/Pharmacy", href: "/dashboard/pharmacy", moduleId: "PHARMACY_SPECIAL" },
@@ -140,12 +143,12 @@ export default function TenantLayout({
       >
         <div className="h-full flex flex-col">
           {/* Logo */}
-          <div className="h-20 flex items-center px-6 border-b border-slate-100">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100">
-              <Store className="w-6 h-6" />
+          <div className="h-14 flex items-center px-5 border-b border-slate-100">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-100">
+              <Store className="w-4 h-4" />
             </div>
             {(isSidebarOpen || isMobileOpen) && (
-              <span className="ml-3 font-black text-sm text-slate-900 break-words leading-tight uppercase line-clamp-2">
+              <span className="ml-2.5 font-black text-xs text-slate-900 break-words leading-tight uppercase line-clamp-2">
                 {user?.tenant?.name || "LINCOZ POS"}
               </span>
             )}
@@ -226,35 +229,41 @@ export default function TenantLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-4">
-            {/* Mobile Toggle */}
-            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} className="lg:hidden text-slate-500 rounded-xl hover:bg-slate-50">
-              <Menu className="w-6 h-6" />
+        <header className="h-14 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-20 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Single Sidebar Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                  setMobileOpen(!isMobileOpen);
+                } else {
+                  setSidebarOpen(!isSidebarOpen);
+                }
+              }}
+              className="h-9 w-9 text-slate-500 rounded-xl hover:bg-slate-50"
+              title="Toggle Sidebar"
+            >
+              <PanelLeft className="w-5 h-5" />
             </Button>
+          </div>
 
-            {/* Desktop Toggle */}
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!isSidebarOpen)} className="hidden lg:flex text-slate-500 rounded-xl hover:bg-slate-50">
-              {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </Button>
-
-            {/* Removed Business Name from Header per user request */}          </div>
-
-          <div className="flex items-center gap-2 sm:gap-4">
-            <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm font-bold">
-              <div className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></div>
               Live
             </div>
-            <Button variant="ghost" size="icon" className="text-slate-500 relative">
-              <Bell className="w-5 h-5" />
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-500 relative">
+              <Bell className="w-4 h-4" />
             </Button>
-            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
               {user?.name?.charAt(0) || "U"}
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#f8fafc]">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[#f8fafc]">
           {children}
         </main>
       </div>

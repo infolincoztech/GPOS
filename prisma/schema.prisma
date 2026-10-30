@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -49,6 +50,8 @@ model User {
   orders         Order[]
   attendances    Attendance[]
   expenses       Expense[]
+
+  @@index([tenantId])
 }
 
 model Tenant {
@@ -197,6 +200,8 @@ model Category {
   dealItems   DealItem[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model Product {
@@ -243,6 +248,9 @@ model Product {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, name])
+  @@index([categoryId])
 }
 
 model Batch {
@@ -257,6 +265,8 @@ model Batch {
   quantity    Float    @default(0)
   
   createdAt   DateTime @default(now())
+
+  @@index([productId])
 }
 
 model BranchStock {
@@ -332,6 +342,8 @@ model Customer {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 // --- BILLING & ORDERS ---
@@ -387,6 +399,10 @@ model Order {
   isClosed          Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, isClosed, createdAt])
+  @@index([tenantId, status, createdAt])
 }
 
 model OrderItem {
@@ -406,6 +422,9 @@ model OrderItem {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 // --- RESTAURANT SPECIFIC ---
@@ -424,6 +443,8 @@ model Table {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([branchId])
 }
 
 // --- HR & STAFF ---
@@ -475,6 +496,8 @@ model Expense {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, date])
 }
 
 model DealItem {
@@ -490,6 +513,8 @@ model DealItem {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([dealId])
 }
 
 model SupplierLedger {
@@ -505,6 +530,8 @@ model SupplierLedger {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
+
+  @@index([tenantId, createdAt])
 }
 
 model Purchase {
@@ -521,6 +548,8 @@ model Purchase {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime @default(now())
+
+  @@index([tenantId, createdAt])
 }
 
 model PurchaseItem {
