@@ -94,6 +94,7 @@ model Tenant {
   warehouses  Warehouse[]
   purchases   Purchase[]
   ledger      SupplierLedger[]
+  gymCheckins GymCheckin[]
 
   subscription Subscription?
   recipeIngredients RecipeIngredient[]
@@ -211,6 +212,7 @@ model Product {
   costPrice   Float    @default(0)
   sku         String?
   barcode     String?
+  description String?
   image       String?
   sizes       Json?
   formula     String?
@@ -329,11 +331,17 @@ model Supplier {
 // --- CRM & CUSTOMERS ---
 
 model Customer {
-  id          String   @id @default(uuid())
-  name        String
-  phone       String?
-  email       String?
-  loyaltyPts  Int      @default(0)
+  id               String    @id @default(uuid())
+  name             String
+  phone            String?
+  email            String?
+  loyaltyPts       Int       @default(0)
+  notes            String?
+  planName         String?
+  planId           String?
+  membershipStart  DateTime?
+  membershipExpiry DateTime?
+  membershipStatus String?   @default("ACTIVE")
   
   tenantId    String
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -344,6 +352,21 @@ model Customer {
   updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+model GymCheckin {
+  id          String   @id @default(uuid())
+  customerId  String?
+  memberName  String
+  memberPhone String?
+  planName    String?
+  status      String   @default("ACTIVE")
+  checkedInAt DateTime @default(now())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, checkedInAt])
 }
 
 // --- BILLING & ORDERS ---
