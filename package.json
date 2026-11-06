@@ -3,12 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "postinstall": "prisma generate",
+    "dev": "next dev -H 0.0.0.0",
     "build": "npx prisma generate && next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start -H 0.0.0.0",
+    "lint": "eslint",
+    "mobile:init": "npx @capacitor/cli add android && npx @capacitor/cli add ios",
+    "mobile:sync": "npx @capacitor/cli sync",
+    "mobile:android": "npx @capacitor/cli open android",
+    "mobile:apk": "cd android && .\\gradlew.bat assembleDebug",
+    "mobile:ios": "npx @capacitor/cli open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",

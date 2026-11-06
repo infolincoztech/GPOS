@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lincoz General POS</string>
+    <string name="title_activity_main">Lincoz General POS</string>
+    <string name="package_name">com.lincoz.generalpos</string>
+    <string name="custom_url_scheme">com.lincoz.generalpos</string>
+</resources>

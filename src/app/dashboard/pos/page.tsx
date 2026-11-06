@@ -7,7 +7,7 @@ import {
   Search, ShoppingCart, Trash2, Plus, Minus, CreditCard,
   Banknote, User, Printer, LayoutGrid, List, Tag,
   CheckCircle2, X, Smartphone, Utensils, Package, History,
-  ChevronLeft, ChevronRight, AlertTriangle, Loader2, Calendar, Download
+  ChevronLeft, ChevronRight, AlertTriangle, Loader2, Calendar, Download, Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import axios from "axios";
+import { CameraBarcodeScanner } from "@/components/camera-barcode-scanner";
+import {
+  cacheCatalogLocally,
+  getLocalCatalog,
+  generateIdempotencyKey,
+  enqueueOfflineOrder,
+  triggerHaptic,
+} from "@/lib/mobile-bridge";
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -78,6 +86,7 @@ function POSContent() {
   const categoriesRef = useRef<HTMLDivElement>(null);
 
   const [printerSetupOpen, setPrinterSetupOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [localCashierIp, setLocalCashierIp] = useState("");
   const [localKitchenIp, setLocalKitchenIp] = useState("");
 
@@ -166,14 +175,29 @@ function POSContent() {
 
   const loadData = async () => {
     try {
+      // 0ms Instant Local Catalog Hydration for Mobile & Offline Support
+      const localCatalog = getLocalCatalog();
+      if (localCatalog.products.length > 0) {
+        setProducts(localCatalog.products);
+        if (localCatalog.categories.length > 0) {
+          setCategories(localCatalog.categories);
+        }
+        setLoading(false);
+      }
+
       const [pRes, catRes, authRes] = await Promise.all([
-        axios.get("/api/products").catch(e => { console.error("POS: Products fail", e); return { data: [] }; }),
-        axios.get("/api/categories").catch(e => { console.error("POS: Categories fail", e); return { data: [] }; }),
+        axios.get("/api/products").catch(e => { console.error("POS: Products fail", e); return { data: null }; }),
+        axios.get("/api/categories").catch(e => { console.error("POS: Categories fail", e); return { data: null }; }),
         axios.get("/api/auth/me").catch(e => { console.error("POS: Auth fail", e); return { data: {} }; }),
       ]);
 
-      setProducts(Array.isArray(pRes.data) ? pRes.data : []);
-      setCategories(Array.isArray(catRes.data) ? catRes.data : []);
+      const fetchedProducts = Array.isArray(pRes.data) ? pRes.data : localCatalog.products;
+      const fetchedCategories = Array.isArray(catRes.data) ? catRes.data : localCatalog.categories;
+
+      setProducts(fetchedProducts);
+      setCategories(fetchedCategories);
+      cacheCatalogLocally(fetchedProducts, fetchedCategories);
+
       if (authRes.data) {
         setCurrentUser(authRes.data);
         setTenantSettings(authRes.data.tenant);
@@ -960,7 +984,7 @@ function POSContent() {
         };
       });
 
-      const res = await axios.post("/api/orders", {
+      const orderPayload = {
         items: checkoutItems,
         totalAmount: total,
         paymentMethod: paymentMethod,
@@ -975,9 +999,32 @@ function POSContent() {
         notes: finalNotes || null,
         status: isPending ? "PENDING" : "COMPLETED",
         paymentStatus: isPending ? "UNPAID" : "PAID",
-      });
+      };
 
-      const orderData = res.data;
+      const idempotencyKey = generateIdempotencyKey();
+      let orderData: any;
+
+      try {
+        const res = await axios.post("/api/orders", orderPayload, {
+          headers: { "X-Idempotency-Key": idempotencyKey },
+        });
+        orderData = res.data;
+        triggerHaptic("success");
+      } catch (postErr: any) {
+        if (!postErr?.response || !navigator.onLine) {
+          enqueueOfflineOrder(orderPayload, idempotencyKey);
+          orderData = {
+            id: idempotencyKey,
+            orderNumber: `OFF-${String(Date.now()).slice(-4)}`,
+            ...orderPayload,
+            createdAt: new Date().toISOString(),
+          };
+          triggerHaptic("medium");
+          toast.warning("Saved to Offline Outbox! Will sync automatically when internet returns.");
+        } else {
+          throw postErr;
+        }
+      }
 
       // Handle Kitchen Printing if pending
       if (isPending) {
@@ -1666,11 +1713,41 @@ function POSContent() {
               <ChevronRight className="w-4 h-4 text-slate-600" />
             </Button>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 sm:top-3 w-5 h-5 text-slate-400" />
-            <Input placeholder={hasPharmacy ? "Search medicine, formula or scan barcode..." : isRestaurant ? (isBakery ? "Search cakes, bakery items or scan barcode..." : "Search food, deals or scan barcode...") : isGym ? "Search memberships, supplements, drinks or scan barcode..." : "Search products or scan barcode..."} className="pl-10 h-10 sm:h-11 rounded-xl bg-slate-50 border-none focus:ring-2 focus:ring-blue-100"
-              value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 sm:top-3 w-5 h-5 text-slate-400" />
+              <Input placeholder={hasPharmacy ? "Search medicine, formula or scan barcode..." : isRestaurant ? (isBakery ? "Search cakes, bakery items or scan barcode..." : "Search food, deals or scan barcode...") : isGym ? "Search memberships, supplements, drinks or scan barcode..." : "Search products or scan barcode..."} className="pl-10 h-10 sm:h-11 rounded-xl bg-slate-50 border-none focus:ring-2 focus:ring-blue-100"
+                value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setScannerOpen(true)}
+              className="h-10 sm:h-11 px-3 rounded-xl border-slate-200 bg-blue-50/70 hover:bg-blue-100 text-blue-600 font-bold text-xs shrink-0 flex items-center gap-1.5"
+              title="Scan Barcode with Phone Camera"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">Scan</span>
+            </Button>
           </div>
+          <CameraBarcodeScanner
+            open={scannerOpen}
+            onClose={() => setScannerOpen(false)}
+            onScan={(scannedCode) => {
+              const matched = products.find(
+                (p) =>
+                  String(p.barcode || "").toLowerCase() === scannedCode.toLowerCase() ||
+                  String(p.sku || "").toLowerCase() === scannedCode.toLowerCase()
+              );
+              if (matched) {
+                addToCart(matched);
+                toast.success(`Added ${matched.name}`);
+              } else {
+                setSearch(scannedCode);
+                toast.info(`Filtered by barcode: ${scannedCode}`);
+              }
+            }}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 scroll-left">
@@ -2270,26 +2347,32 @@ function POSContent() {
         </div>
       </div>
 
-      {/* Floating Cart Button for Mobile */}
+      {/* Floating Cart Bar for Mobile */}
       {!showMobileCart && cart.length > 0 && (
         <motion.div
           initial={{ y: 100 }} animate={{ y: 0 }}
-          className="fixed bottom-6 right-6 lg:hidden z-20"
+          className="fixed bottom-20 inset-x-4 lg:hidden z-30"
         >
           <Button
-            onClick={() => setShowMobileCart(true)}
-            className="h-14 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xl shadow-blue-200 flex items-center gap-3"
+            onClick={() => {
+              triggerHaptic("light");
+              setShowMobileCart(true);
+            }}
+            className="w-full h-14 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xl shadow-blue-300/60 flex items-center justify-between"
           >
-            <div className="relative">
-              <ShoppingCart className="w-6 h-6" />
-              <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
-                {cart.reduce((s, i) => s + i.quantity, 0)}
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="relative bg-white/15 p-2 rounded-xl">
+                <ShoppingCart className="w-5 h-5" />
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black">
+                  {cart.reduce((s, i) => s + i.quantity, 0)}
+                </span>
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] opacity-80 uppercase tracking-wider leading-none font-black">View Cart & Pay</p>
+                <p className="text-base font-black leading-none mt-1">PKR {total.toFixed(2)}</p>
+              </div>
             </div>
-            <div className="text-left">
-              <p className="text-[10px] opacity-70 uppercase tracking-wider leading-none">View Cart</p>
-              <p className="text-lg leading-none mt-1">PKR {total.toFixed(2)}</p>
-            </div>
+            <ChevronRight className="w-5 h-5 opacity-80" />
           </Button>
         </motion.div>
       )}

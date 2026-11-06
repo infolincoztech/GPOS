@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { setCached } from "@/lib/cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,15 @@ export async function POST(req: NextRequest) {
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+    }
+
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+    const rateCheck = checkRateLimit(`login:${clientIp}:${email.toLowerCase()}`, 15, 60000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please wait a minute and try again." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfterSec) } }
+      );
     }
 
     const MASTER_SUPER_ADMIN_EMAIL = "lincoztech@gmail.com";
@@ -121,10 +131,15 @@ export async function POST(req: NextRequest) {
       user: userPayload,
     });
 
+    const isHttps =
+      req.nextUrl.protocol === "https:" ||
+      req.headers.get("x-forwarded-proto") === "https";
+
     response.cookies.set("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "strict",
+      secure: isHttps,
+      sameSite: "lax",
+      path: "/",
       maxAge: 60 * 60 * 24,
     });
 

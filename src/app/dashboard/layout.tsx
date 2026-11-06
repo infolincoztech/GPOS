@@ -24,12 +24,15 @@ import {
   Pill,
   Dumbbell,
   PanelLeft,
-  Wallet
+  Wallet,
+  WifiOff,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import axios from "axios";
 import { toast } from "sonner";
+import { getOfflineOrdersQueue, syncOfflineOrders } from "@/lib/mobile-bridge";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -55,11 +58,27 @@ export default function TenantLayout({
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [queuedCount, setQueuedCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     axios.get("/api/auth/me").then(res => setUser(res.data)).catch(() => { });
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+      setQueuedCount(getOfflineOrdersQueue().length);
+      const onNet = () => setIsOnline(navigator.onLine);
+      const onQueue = (e: any) => setQueuedCount(e?.detail?.count ?? getOfflineOrdersQueue().length);
+      window.addEventListener("online", onNet);
+      window.addEventListener("offline", onNet);
+      window.addEventListener("gpos-offline-queue-changed", onQueue as EventListener);
+      return () => {
+        window.removeEventListener("online", onNet);
+        window.removeEventListener("offline", onNet);
+        window.removeEventListener("gpos-offline-queue-changed", onQueue as EventListener);
+      };
+    }
   }, []);
 
   // RBAC Guard: Redirect users to their allowed screens based on role
@@ -250,10 +269,28 @@ export default function TenantLayout({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></div>
-              Live
-            </div>
+            {queuedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => syncOfflineOrders()}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold"
+                title="Tap to sync queued offline orders"
+              >
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                {queuedCount} Queued
+              </button>
+            )}
+            {isOnline ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></div>
+                Live
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold">
+                <WifiOff className="w-3.5 h-3.5" />
+                Offline
+              </div>
+            )}
             <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-500 relative">
               <Bell className="w-4 h-4" />
             </Button>
@@ -263,9 +300,35 @@ export default function TenantLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[#f8fafc]">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 pb-20 lg:pb-5 bg-[#f8fafc]">
           {children}
         </main>
+
+        {/* Native-Style Mobile Bottom Navigation Bar */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 flex items-center justify-around z-40 shadow-[0_-4px_16px_rgba(15,23,42,0.06)]">
+          {[
+            { icon: LayoutDashboard, label: "Home", href: "/dashboard" },
+            { icon: ShoppingCart, label: "POS", href: "/dashboard/pos" },
+            { icon: History, label: "Sales", href: "/dashboard/orders" },
+            { icon: Package, label: "Stock", href: "/dashboard/inventory" },
+            { icon: Wallet, label: "Finance", href: "/dashboard/finance" },
+          ].map((tab) => {
+            const active = pathname === tab.href;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 py-1.5 rounded-xl transition-colors",
+                  active ? "text-blue-600" : "text-slate-400 hover:text-slate-700"
+                )}
+              >
+                <tab.icon className={cn("w-5 h-5", active && "stroke-[2.5px]")} />
+                <span className="text-[10px] font-bold mt-0.5">{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   </div>
