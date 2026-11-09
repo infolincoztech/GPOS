@@ -1796,11 +1796,11 @@ function POSContent() {
                       )}
                       <div className={cn(viewMode === "list" && "flex items-center gap-4")}>
                         {!hasPharmacy && (
-                          <div className={cn("rounded-xl bg-white flex items-center justify-center text-slate-300 overflow-hidden border border-slate-50",
-                            viewMode === "grid" ? "h-20 sm:h-24 w-full mb-2 sm:mb-3" : "h-11 w-11 shrink-0")}>
+                          <div className={cn("rounded-xl bg-slate-100/70 flex items-center justify-center text-slate-400 overflow-hidden border border-slate-200/60 relative",
+                            viewMode === "grid" ? "aspect-square w-full mb-2.5" : "h-12 w-12 shrink-0")}>
                             {product.image
-                              ? <img src={product.image} className="h-full w-full object-contain p-1" alt="" />
-                              : <ShoppingCart className="w-5 h-5 opacity-30" />}
+                              ? <img src={product.image} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" alt={product.name || ""} />
+                              : <ShoppingCart className="w-6 h-6 opacity-40" />}
                           </div>
                         )}
                         <div>
