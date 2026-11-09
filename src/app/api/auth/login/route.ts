@@ -127,6 +127,30 @@ export async function POST(req: NextRequest) {
     // Cache user profile so immediate post-login /api/auth/me calls return in <5ms
     setCached(`user:${user.id}`, userPayload, 60000);
 
+    // Fire-and-forget pre-warm of tenant products & categories cache on login
+    if (user.tenantId) {
+      const tId = user.tenantId;
+      Promise.all([
+        prisma.product
+          .findMany({
+            where: { tenantId: tId },
+            include: {
+              category: true,
+              batches: { orderBy: { expiryDate: "asc" } },
+              dealItems: { include: { product: true, category: true } },
+            },
+            orderBy: { name: "asc" },
+          })
+          .then((prods) => setCached(`tenant:${tId}:products`, prods, 30000)),
+        prisma.category
+          .findMany({
+            where: { tenantId: tId },
+            include: { _count: { select: { products: true } } },
+          })
+          .then((cats) => setCached(`tenant:${tId}:categories`, cats, 30000)),
+      ]).catch(() => {});
+    }
+
     const response = NextResponse.json({
       user: userPayload,
     });

@@ -37,7 +37,44 @@ import { toast } from "sonner";
 import axios from "axios";
 import { cn } from "@/lib/utils";
 
-const emptyProduct = { name: "", price: "", stock: "", sku: "", barcode: "", categoryId: "", image: "", formula: "", location: "" };;
+const emptyProduct = { name: "", price: "", stock: "", sku: "", barcode: "", categoryId: "", image: "", formula: "", location: "" };
+
+const compressImageFile = (file: File, maxSize = 400): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/webp", 0.8));
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -214,13 +251,18 @@ export default function InventoryPage() {
 
   const handleExportProducts = () => {
     try {
-      const headers = ["name", "price", "stock", "sku", "barcode", "sizes"];
+      const headers = ["name", "category", "price", "costPrice", "stock", "minStock", "sku", "barcode", "unit", "image", "sizes"];
       const rows = products.map((p) => [
-        `"${p.name.replace(/"/g, '""')}"`,
-        p.price,
-        p.stock,
-        `"${(p.sku || "").replace(/"/g, '""')}"`,
-        `"${(p.barcode || "").replace(/"/g, '""')}"`,
+        `"${String(p.name || "").replace(/"/g, '""')}"`,
+        `"${String(p.category?.name || "").replace(/"/g, '""')}"`,
+        p.price ?? 0,
+        p.costPrice ?? 0,
+        p.stock ?? 0,
+        p.minStock ?? 5,
+        `"${String(p.sku || "").replace(/"/g, '""')}"`,
+        `"${String(p.barcode || "").replace(/"/g, '""')}"`,
+        `"${String(p.unit || "PCS").replace(/"/g, '""')}"`,
+        `"${String(p.image || "").replace(/"/g, '""')}"`,
         `"${JSON.stringify(p.sizes || []).replace(/"/g, '""')}"`
       ]);
       const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -238,50 +280,164 @@ export default function InventoryPage() {
     }
   };
 
+  const parseCsvRow = (line: string): string[] => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (inQuotes) {
+        if (char === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ",") {
+          result.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset input so selecting the same file again still triggers onChange
+    e.target.value = "";
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
+      const toastId = toast.loading("Importing products from CSV...");
       try {
-        const text = evt.target?.result as string;
-        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-        if (lines.length <= 1) return toast.error("CSV file is empty");
-        
-        let importedCount = 0;
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i];
-          const matches = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
-          const parsedRow = matches.map(m => m.replace(/^"|"$/g, "").replace(/""/g, '"').trim());
+        const rawText = ((evt.target?.result as string) || "").replace(/^\uFEFF/, "");
+        const lines = rawText
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
 
-          if (parsedRow.length > 0) {
-            const name = parsedRow[0];
-            const price = parseFloat(parsedRow[1]) || 0;
-            const stock = parseInt(parsedRow[2]) || 0;
-            const sku = parsedRow[3] || "";
-            const barcode = parsedRow[4] || "";
-            const sizesRaw = parsedRow[5] || "";
-            
-            let sizes = null;
-            try {
-              if (sizesRaw) sizes = JSON.parse(sizesRaw);
-            } catch {}
-
-            await axios.post("/api/products", {
-              name,
-              price,
-              stock,
-              sku,
-              barcode,
-              sizes
-            });
-            importedCount++;
-          }
+        if (lines.length === 0) {
+          toast.error("CSV file is empty", { id: toastId });
+          return;
         }
-        toast.success(`Successfully restored ${importedCount} products!`);
+
+        const firstRow = parseCsvRow(lines[0]);
+        const normalizedHeaders = firstRow.map((h) =>
+          h.toLowerCase().replace(/[^a-z0-9]/g, "")
+        );
+
+        const knownHeaders = [
+          "name", "productname", "product", "item", "title",
+          "price", "sellingprice", "saleprice", "unitprice", "mrp",
+          "stock", "quantity", "qty", "sku", "barcode", "category", "categoryname"
+        ];
+        const hasHeaderRow = normalizedHeaders.some((h) => knownHeaders.includes(h));
+
+        const findColIndex = (aliases: string[], fallbackIdx: number): number => {
+          if (!hasHeaderRow) return fallbackIdx;
+          const idx = normalizedHeaders.findIndex((h) => aliases.includes(h));
+          return idx;
+        };
+
+        const nameIdx = findColIndex(["name", "productname", "product", "item", "itemname", "title"], 0);
+        const categoryIdx = findColIndex(["category", "categoryname", "department", "group"], -1);
+        const priceIdx = findColIndex(["price", "sellingprice", "saleprice", "unitprice", "mrp", "rate"], 1);
+        const costIdx = findColIndex(["costprice", "cost", "purchaseprice", "buyingprice"], -1);
+        const stockIdx = findColIndex(["stock", "quantity", "qty", "openingstock", "inventory"], 2);
+        const minStockIdx = findColIndex(["minstock", "minimumstock", "reorderlevel", "alertqty"], -1);
+        const skuIdx = findColIndex(["sku", "code", "itemcode", "productcode"], 3);
+        const barcodeIdx = findColIndex(["barcode", "ean", "upc"], 4);
+        const unitIdx = findColIndex(["unit", "uom"], -1);
+        const formulaIdx = findColIndex(["formula", "generic", "salt"], -1);
+        const imageIdx = findColIndex(["image", "imageurl", "photo"], -1);
+        const sizesIdx = findColIndex(["sizes", "variants"], 5);
+
+        const startIdx = hasHeaderRow ? 1 : 0;
+        const productsToImport: any[] = [];
+
+        for (let i = startIdx; i < lines.length; i++) {
+          const parsedRow = parseCsvRow(lines[i]);
+          if (parsedRow.length === 0) continue;
+
+          const name = (nameIdx >= 0 ? parsedRow[nameIdx] : parsedRow[0])?.trim();
+          if (!name) continue;
+
+          const priceRaw = priceIdx >= 0 ? parsedRow[priceIdx] : "0";
+          const stockRaw = stockIdx >= 0 ? parsedRow[stockIdx] : "0";
+          const costRaw = costIdx >= 0 ? parsedRow[costIdx] : "0";
+          const minStockRaw = minStockIdx >= 0 ? parsedRow[minStockIdx] : "5";
+
+          const price = parseFloat(String(priceRaw || "0").replace(/[^0-9.-]/g, "")) || 0;
+          const stock = parseFloat(String(stockRaw || "0").replace(/[^0-9.-]/g, "")) || 0;
+          const costPrice = parseFloat(String(costRaw || "0").replace(/[^0-9.-]/g, "")) || 0;
+          const minStock = parseFloat(String(minStockRaw || "5").replace(/[^0-9.-]/g, "")) || 5;
+
+          const categoryName = categoryIdx >= 0 ? parsedRow[categoryIdx] || "" : "";
+          const sku = skuIdx >= 0 ? parsedRow[skuIdx] || "" : "";
+          const barcode = barcodeIdx >= 0 ? parsedRow[barcodeIdx] || "" : "";
+          const unit = unitIdx >= 0 ? parsedRow[unitIdx] || "PCS" : "PCS";
+          const formula = formulaIdx >= 0 ? parsedRow[formulaIdx] || "" : "";
+          const image = imageIdx >= 0 ? parsedRow[imageIdx] || "" : "";
+          const sizesRaw = sizesIdx >= 0 ? parsedRow[sizesIdx] || "" : "";
+
+          let sizes = null;
+          if (sizesRaw && sizesRaw !== "[]") {
+            try {
+              const parsed = JSON.parse(sizesRaw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                sizes = parsed;
+              }
+            } catch {}
+          }
+
+          productsToImport.push({
+            name,
+            categoryName,
+            price,
+            costPrice,
+            stock,
+            minStock,
+            sku,
+            barcode,
+            unit,
+            formula,
+            image,
+            sizes,
+          });
+        }
+
+        if (productsToImport.length === 0) {
+          toast.error("No valid product rows found in CSV file.", { id: toastId });
+          return;
+        }
+
+        const res = await axios.post("/api/products", { products: productsToImport });
+        const { importedCount = 0, updatedCount = 0, totalProcessed = productsToImport.length } = res.data || {};
+
+        toast.success(
+          `Successfully imported ${totalProcessed} products (${importedCount} new, ${updatedCount} updated)!`,
+          { id: toastId }
+        );
         fetchAll();
       } catch (err: any) {
-        toast.error("Failed to import CSV: " + err.message);
+        console.error("CSV Import error:", err);
+        toast.error(
+          "Failed to import CSV: " + (err.response?.data?.error || err.message),
+          { id: toastId }
+        );
       }
     };
     reader.readAsText(file);
@@ -642,11 +798,8 @@ export default function InventoryPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setNewProduct({ ...newProduct, image: reader.result as string });
-                        };
-                        reader.readAsDataURL(file);
+                        const compressed = await compressImageFile(file);
+                        setNewProduct({ ...newProduct, image: compressed });
                       }
                     }}
                   />
@@ -824,11 +977,8 @@ export default function InventoryPage() {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setEditProduct({ ...editProduct, image: reader.result as string });
-                          };
-                          reader.readAsDataURL(file);
+                          const compressed = await compressImageFile(file);
+                          setEditProduct({ ...editProduct, image: compressed });
                         }
                       }}
                     />

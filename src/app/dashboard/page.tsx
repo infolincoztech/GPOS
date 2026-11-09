@@ -204,7 +204,7 @@ export default function Dashboard() {
                 <p className="text-slate-400 font-bold">No orders yet — start selling!</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                 <AreaChart
                   data={stats.recentOrders.map((o: any) => ({
                     time: new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),

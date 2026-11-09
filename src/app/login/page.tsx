@@ -16,6 +16,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  React.useEffect(() => {
+    // Pre-warm server & DB connection while user types credentials
+    fetch("/api/auth/me", { method: "GET" }).catch(() => {});
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return toast.error("Please fill in all fields");
