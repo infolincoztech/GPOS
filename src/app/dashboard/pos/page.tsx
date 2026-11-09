@@ -1053,7 +1053,6 @@ function POSContent() {
       if (!isPending) {
         setShowReceipt(true);
         toast.success("Order processed and paid!");
-        triggerCashierPrint(orderData);
       } else {
         toast.success("Order sent to kitchen!");
       }
