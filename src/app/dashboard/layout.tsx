@@ -248,8 +248,8 @@ export default function TenantLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="min-h-14 pt-[env(safe-area-inset-top,0px)] bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 py-2">
+        <header className="h-14 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-20 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Single Sidebar Toggle */}
             <Button
               variant="ghost"
@@ -268,7 +268,7 @@ export default function TenantLayout({
             </Button>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 py-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             {queuedCount > 0 && (
               <button
                 type="button"
@@ -305,7 +305,7 @@ export default function TenantLayout({
         </main>
 
         {/* Native-Style Mobile Bottom Navigation Bar */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 pb-[env(safe-area-inset-bottom,0px)] bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 flex items-center justify-around z-40 shadow-[0_-4px_16px_rgba(15,23,42,0.06)]">
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 flex items-center justify-around z-40 shadow-[0_-4px_16px_rgba(15,23,42,0.06)]">
           {[
             { icon: LayoutDashboard, label: "Home", href: "/dashboard" },
             { icon: ShoppingCart, label: "POS", href: "/dashboard/pos" },
