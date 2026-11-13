@@ -126,6 +126,17 @@
   }
 }
 
+/* Safe Area Utilities for Mobile Notches & Status Bar */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.mt-safe {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
 @layer base {
   html {
     font-size: 13.5px;
@@ -141,6 +152,7 @@
   body {
     @apply bg-background text-foreground text-sm;
     font-feature-settings: "rlig" 1, "calt" 1;
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 
