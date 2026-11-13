@@ -32,6 +32,15 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 
+  --text-xs: 0.7rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.875rem;
+  --text-lg: 0.975rem;
+  --text-xl: 1.1rem;
+  --text-2xl: 1.3rem;
+  --text-3xl: 1.55rem;
+  --text-4xl: 1.85rem;
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -118,11 +127,19 @@
 }
 
 @layer base {
+  html {
+    font-size: 13.5px;
+  }
+  @media (min-width: 1024px) {
+    html {
+      font-size: 14px;
+    }
+  }
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground text-sm;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
