@@ -25,7 +25,7 @@ const config = {
     StatusBar: {
       style: "LIGHT",
       backgroundColor: "#ffffff",
-      overlaysWebView: false,
+      overlaysWebView: true,
     },
     Keyboard: {
       resize: "body",

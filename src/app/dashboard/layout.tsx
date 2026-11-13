@@ -248,7 +248,7 @@ export default function TenantLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-20 shrink-0">
+        <header className="h-12 sm:h-14 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between z-20 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Single Sidebar Toggle */}
             <Button
@@ -300,7 +300,7 @@ export default function TenantLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 pb-20 lg:pb-5 bg-[#f8fafc]">
+        <main className="flex-1 overflow-y-auto p-2 sm:p-5 pb-20 lg:pb-5 bg-[#f8fafc]">
           {children}
         </main>
 
