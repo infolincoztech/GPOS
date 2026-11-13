@@ -440,23 +440,10 @@ export default function TenantsPage() {
                 <Input placeholder="Business address" className="h-14 rounded-2xl bg-slate-50 border-slate-100 text-lg font-bold px-5"
                   value={newBusiness.address} onChange={(e) => setNewBusiness({ ...newBusiness, address: e.target.value })} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Admin Password</label>
-                  <Input type="password" placeholder="Default: admin123" className="h-14 rounded-2xl bg-slate-50 border-slate-100 text-lg font-bold px-5"
-                    value={newBusiness.adminPassword} onChange={(e) => setNewBusiness({ ...newBusiness, adminPassword: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Subscription Plan</label>
-                  <Select value={newBusiness.planId} onValueChange={(v) => setNewBusiness({ ...newBusiness, planId: v })}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-slate-50 border-slate-100 text-lg font-bold px-5"><SelectValue placeholder="Select a plan" /></SelectTrigger>
-                    <SelectContent position="popper" className="rounded-2xl border-slate-100 shadow-2xl z-[100]">
-                      {plans.map((p) => (
-                        <SelectItem key={p.id} value={p.id} className="rounded-xl font-bold py-3 uppercase tracking-tighter">{p.name} — ${p.price}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Admin Password</label>
+                <Input type="password" placeholder="Default: admin123" className="h-14 rounded-2xl bg-slate-50 border-slate-100 text-lg font-bold px-5"
+                  value={newBusiness.adminPassword} onChange={(e) => setNewBusiness({ ...newBusiness, adminPassword: e.target.value })} />
               </div>
               <div className="pt-4 flex gap-4">
                 <Button type="button" variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 h-14 rounded-2xl font-black text-slate-500 hover:bg-slate-50">

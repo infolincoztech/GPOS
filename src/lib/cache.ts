@@ -69,7 +69,7 @@ export function invalidateTenantCache(tenantId?: string | null): void {
   if (!tenantId) return;
   const prefix = `tenant:${tenantId}:`;
   for (const key of cacheStore.keys()) {
-    if (key.startsWith(prefix)) {
+    if (key.startsWith(prefix) || key.startsWith("user:")) {
       cacheStore.delete(key);
     }
   }

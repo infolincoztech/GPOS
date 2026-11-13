@@ -1,32 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import jwt from "jsonwebtoken";
+import { requireTenantUser } from "@/lib/auth";
+import { invalidateCacheKey, invalidateTenantCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
-const JWT_SECRET = process.env.JWT_SECRET || "licoz_pos_jwt_super_secret_2026_xK9mP3qR7vN2wL8";
-
-function getAuth(req: NextRequest) {
-  const token = req.cookies.get("token")?.value;
-  if (!token) return null;
-  try { return jwt.verify(token, JWT_SECRET) as any; } catch { return null; }
-}
-
-// Update own tenant business settings (Only for Tenant Admins)
+// Update own tenant business settings (Only for Tenant/Business Admins)
 export async function PATCH(req: NextRequest) {
-  const decoded = getAuth(req);
-  if (!decoded || !decoded.tenantId || decoded.role !== "TENANT_ADMIN") {
-    return NextResponse.json({ error: "Unauthorized. Only Tenant Admins can update business settings." }, { status: 403 });
+  const decoded = requireTenantUser(req);
+  if (
+    !decoded ||
+    !decoded.tenantId ||
+    !["TENANT_ADMIN", "BUSINESS_ADMIN", "SUPER_ADMIN"].includes(decoded.role)
+  ) {
+    return NextResponse.json(
+      { error: "Unauthorized. Only Business Admins can update business settings." },
+      { status: 403 }
+    );
   }
 
   try {
     const body = await req.json();
-    const { 
+    const {
       name,
+      phone,
+      address,
       logoUrl,
-      ntn, 
-      strn, 
-      cashTaxRate, 
+      ntn,
+      strn,
+      cashTaxRate,
       cardTaxRate,
       receiptWhatsAppString,
       receiptAddressString,
@@ -37,20 +39,29 @@ export async function PATCH(req: NextRequest) {
       kitchenPrinterIp,
       kitchenPrinterPort,
       cashierPrinterIp,
-      cashierPrinterPort
+      cashierPrinterPort,
     } = body;
+
+    const resolvedPhone =
+      phone !== undefined ? phone : receiptWhatsAppString !== undefined ? receiptWhatsAppString : undefined;
+    const resolvedAddress =
+      address !== undefined ? address : receiptAddressString !== undefined ? receiptAddressString : undefined;
 
     const updated = await prisma.tenant.update({
       where: { id: decoded.tenantId },
       data: {
-        name: name !== undefined ? name : undefined,
+        name: name !== undefined && String(name).trim() ? String(name).trim() : undefined,
+        phone: resolvedPhone,
+        address: resolvedAddress,
         logoUrl: logoUrl !== undefined ? logoUrl : undefined,
         ntn: ntn !== undefined ? ntn : undefined,
         strn: strn !== undefined ? strn : undefined,
         cashTaxRate: cashTaxRate !== undefined ? parseFloat(cashTaxRate) : undefined,
         cardTaxRate: cardTaxRate !== undefined ? parseFloat(cardTaxRate) : undefined,
-        receiptWhatsAppString: receiptWhatsAppString !== undefined ? receiptWhatsAppString : undefined,
-        receiptAddressString: receiptAddressString !== undefined ? receiptAddressString : undefined,
+        receiptWhatsAppString:
+          receiptWhatsAppString !== undefined ? receiptWhatsAppString : resolvedPhone,
+        receiptAddressString:
+          receiptAddressString !== undefined ? receiptAddressString : resolvedAddress,
         receiptRaastString: receiptRaastString !== undefined ? receiptRaastString : undefined,
         receiptBankString: receiptBankString !== undefined ? receiptBankString : undefined,
         receiptEasyPaisaString: receiptEasyPaisaString !== undefined ? receiptEasyPaisaString : undefined,
@@ -61,6 +72,10 @@ export async function PATCH(req: NextRequest) {
         cashierPrinterPort: cashierPrinterPort !== undefined ? parseInt(cashierPrinterPort) || null : undefined,
       },
     });
+
+    // Clear user & tenant cache so /api/auth/me and POS receipts reflect changes immediately
+    invalidateCacheKey(`user:${decoded.id}`);
+    invalidateTenantCache(decoded.tenantId);
 
     return NextResponse.json(updated);
   } catch (error: any) {

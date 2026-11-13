@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Assign Modules from Plan to Tenant
+    // 3. Assign Modules from Plan to Tenant (or default General POS modules when no plan is selected)
     if (tenant.subscription?.plan?.modules) {
       const tenantModules = tenant.subscription.plan.modules.map((pm: any) => ({
         tenantId: tenant.id,
@@ -123,6 +123,20 @@ export async function POST(req: NextRequest) {
         data: tenantModules,
         skipDuplicates: true,
       });
+    } else {
+      const defaultModuleNames = ["POS_BASIC", "RETAIL_GROCERY", "CRM_LOYALTY", "ANALYTICS_AI"];
+      for (const modName of defaultModuleNames) {
+        const mod = await prisma.module.upsert({
+          where: { name: modName },
+          update: {},
+          create: { name: modName, description: `${modName} module` },
+        });
+        await prisma.tenantModule.upsert({
+          where: { tenantId_moduleId: { tenantId: tenant.id, moduleId: mod.id } },
+          update: {},
+          create: { tenantId: tenant.id, moduleId: mod.id },
+        });
+      }
     }
 
     return NextResponse.json(tenant);

@@ -1285,15 +1285,20 @@ function POSContent() {
       toast.error("Popup blocked! Please enable popups to print receipt.");
       return;
     }
-    const businessName = tenantSettings?.name || "Cheesy Bite";
+    const businessName = tenantSettings?.name || "General Store";
+    const businessAddress = tenantSettings?.receiptAddressString || tenantSettings?.address || "";
+    const businessPhone = tenantSettings?.receiptWhatsAppString || tenantSettings?.phone || "";
 
-    const logoHtml = (!hasPharmacy && !isGym && tenantSettings?.logoUrl)
-      ? `<img src="${tenantSettings.logoUrl}" style="max-width: 80px; max-height: 80px; margin: 0 auto 8px auto; display: block;" alt="Business Logo" />`
+    const logoHtml = tenantSettings?.logoUrl
+      ? `<img src="${tenantSettings.logoUrl}" style="max-width: 80px; max-height: 80px; margin: 0 auto 8px auto; display: block; object-fit: contain;" alt="Business Logo" />`
       : "";
 
-    const titleHtml = (!hasPharmacy && !isGym)
-      ? `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">${businessName}</div>`
-      : "";
+    const headerContactHtml = `
+      ${businessAddress ? `<div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">${businessAddress}</div>` : ""}
+      ${businessPhone ? `<div style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">Ph: ${businessPhone}</div>` : ""}
+    `;
+
+    const titleHtml = `<div style="font-weight: bold; font-size: 14px; margin-bottom: 2px; text-transform: uppercase;">${businessName}</div>${headerContactHtml}`;
 
     const receiptLabel = hasPharmacy
       ? "PHARMACY CASH RECEIPT"
@@ -1339,11 +1344,11 @@ function POSContent() {
       ? `<div style="display: flex; justify-content: space-between;"><span>Delivery Charges:</span><span>${order.deliveryCharges.toFixed(2)}</span></div>`
       : "";
 
-    const addressHtml = tenantSettings?.receiptAddressString
-      ? `<div style="margin-bottom: 2px;">Address: ${tenantSettings.receiptAddressString}</div>`
+    const addressHtml = businessAddress
+      ? `<div style="margin-bottom: 2px;">Address: ${businessAddress}</div>`
       : "";
-    const whatsAppHtml = tenantSettings?.receiptWhatsAppString
-      ? `<div style="margin-bottom: 4px;">WhatsApp: ${tenantSettings.receiptWhatsAppString}</div>`
+    const whatsAppHtml = businessPhone
+      ? `<div style="margin-bottom: 4px;">Phone: ${businessPhone}</div>`
       : "";
     const ntnHtml = tenantSettings?.ntn ? `<div style="font-size: 9px;">NTN: ${tenantSettings.ntn}</div>` : "";
     const strnHtml = tenantSettings?.strn ? `<div style="font-size: 9px;">STRN: ${tenantSettings.strn}</div>` : "";
@@ -2826,16 +2831,24 @@ function POSContent() {
                   <div ref={receiptRef} className="receipt-body font-mono text-xs bg-white text-black p-6 w-[300px] mx-auto border-x border-slate-200/50 shadow-md" style={{ backgroundColor: "#ffffff", color: "#000000", fontFamily: "monospace" }}>
                     <div style={{ textAlign: "center", marginBottom: "12px" }}>
                       <div style={{ fontSize: "10px", color: "#000000", lineHeight: "1.4", fontWeight: "bold" }}>
-                        {(!hasPharmacy && !isGym) && tenantSettings?.logoUrl && (
+                        {tenantSettings?.logoUrl && (
                           <img
                             src={tenantSettings.logoUrl}
-                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block" }}
+                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block", objectFit: "contain" }}
                             alt="Business Logo"
                           />
                         )}
-                        {(!hasPharmacy && !isGym) && (
-                          <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "4px", textTransform: "uppercase" }}>
-                            {tenantSettings?.name || "Cheesy Bite"}
+                        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "2px", textTransform: "uppercase" }}>
+                          {tenantSettings?.name || "General Store"}
+                        </div>
+                        {(tenantSettings?.receiptAddressString || tenantSettings?.address) && (
+                          <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "2px" }}>
+                            {tenantSettings?.receiptAddressString || tenantSettings?.address}
+                          </div>
+                        )}
+                        {(tenantSettings?.receiptWhatsAppString || tenantSettings?.phone) && (
+                          <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "4px" }}>
+                            Ph: {tenantSettings?.receiptWhatsAppString || tenantSettings?.phone}
                           </div>
                         )}
                         <div style={{ fontWeight: "bold", fontSize: "11px", marginBottom: "6px", textTransform: "uppercase" }}>
@@ -2944,14 +2957,14 @@ function POSContent() {
                     <div style={{ textAlign: "center", marginBottom: "8px" }}>
                       {/* Logo & Name displayed at the top */}
                       <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "center", lineHeight: "1.4" }}>
-                        {tenantSettings?.receiptAddressString && (
+                        {(tenantSettings?.receiptAddressString || tenantSettings?.address) && (
                           <div style={{ marginBottom: "2px" }}>
-                            Address: {tenantSettings.receiptAddressString}
+                            Address: {tenantSettings.receiptAddressString || tenantSettings.address}
                           </div>
                         )}
-                        {tenantSettings?.receiptWhatsAppString && (
+                        {(tenantSettings?.receiptWhatsAppString || tenantSettings?.phone) && (
                           <div style={{ marginBottom: "4px" }}>
-                            WhatsApp: {tenantSettings.receiptWhatsAppString}
+                            Phone: {tenantSettings.receiptWhatsAppString || tenantSettings.phone}
                           </div>
                         )}
                         {tenantSettings?.ntn && (

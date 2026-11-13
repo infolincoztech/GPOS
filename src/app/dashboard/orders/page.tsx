@@ -588,12 +588,14 @@ export default function OrdersPage() {
       toast.error("Popup blocked! Please allow popups to print.");
       return;
     }
-    const businessName = selectedOrder.tenant?.name || "Cheesy Bite";
-    const addressHtml = selectedOrder.tenant?.receiptAddressString
-      ? `<div style="margin-bottom: 2px;">Address: ${selectedOrder.tenant.receiptAddressString}</div>`
+    const businessName = selectedOrder.tenant?.name || "General Store";
+    const businessAddress = selectedOrder.tenant?.receiptAddressString || selectedOrder.tenant?.address || "";
+    const businessPhone = selectedOrder.tenant?.receiptWhatsAppString || selectedOrder.tenant?.phone || "";
+    const addressHtml = businessAddress
+      ? `<div style="margin-bottom: 2px;">Address: ${businessAddress}</div>`
       : "";
-    const whatsAppHtml = selectedOrder.tenant?.receiptWhatsAppString
-      ? `<div style="margin-bottom: 4px;">WhatsApp: ${selectedOrder.tenant.receiptWhatsAppString}</div>`
+    const whatsAppHtml = businessPhone
+      ? `<div style="margin-bottom: 4px;">Phone: ${businessPhone}</div>`
       : "";
     const ntnHtml = selectedOrder.tenant?.ntn ? `<div style="font-size: 9px;">NTN: ${selectedOrder.tenant.ntn}</div>` : "";
     const strnHtml = selectedOrder.tenant?.strn ? `<div style="font-size: 9px;">STRN: ${selectedOrder.tenant.strn}</div>` : "";
@@ -716,9 +718,11 @@ export default function OrdersPage() {
         <div style="text-align: center; margin-bottom: 12px;">
           <div style="font-size: 10px; color: #000000; line-height: 1.4; font-weight: bold;">
             ${logoHtml}
-            <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 2px; text-transform: uppercase;">
               ${businessName}
             </div>
+            ${businessAddress ? `<div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">${businessAddress}</div>` : ""}
+            ${businessPhone ? `<div style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">Ph: ${businessPhone}</div>` : ""}
             <div style="font-weight: bold; font-size: 11px; margin-bottom: 6px; text-transform: uppercase;">RECEIPT</div>
             Date: ${new Date(selectedOrder.createdAt || Date.now()).toLocaleString()}<br/>
             Order #: ${selectedOrder.orderNumber}<br/>
@@ -1198,13 +1202,23 @@ export default function OrdersPage() {
                         {selectedOrder.tenant?.logoUrl && (
                           <img 
                             src={selectedOrder.tenant.logoUrl} 
-                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block" }} 
+                            style={{ maxWidth: "80px", maxHeight: "80px", margin: "0 auto 8px auto", display: "block", objectFit: "contain" }} 
                             alt="Business Logo" 
                           />
                         )}
-                        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "4px", textTransform: "uppercase" }}>
-                          {selectedOrder.tenant?.name || "Cheesy Bite"}
+                        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "2px", textTransform: "uppercase" }}>
+                          {selectedOrder.tenant?.name || "General Store"}
                         </div>
+                        {(selectedOrder.tenant?.receiptAddressString || selectedOrder.tenant?.address) && (
+                          <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "2px" }}>
+                            {selectedOrder.tenant.receiptAddressString || selectedOrder.tenant.address}
+                          </div>
+                        )}
+                        {(selectedOrder.tenant?.receiptWhatsAppString || selectedOrder.tenant?.phone) && (
+                          <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "4px" }}>
+                            Ph: {selectedOrder.tenant.receiptWhatsAppString || selectedOrder.tenant.phone}
+                          </div>
+                        )}
                         <div style={{ fontWeight: "bold", fontSize: "11px", marginBottom: "6px", textTransform: "uppercase" }}>RECEIPT</div>
                         Date: {new Date(selectedOrder.createdAt || Date.now()).toLocaleString()}<br/>
                         Order #: ${selectedOrder.orderNumber}<br/>
@@ -1294,14 +1308,14 @@ export default function OrdersPage() {
                     <div style={{ textAlign: "center", marginBottom: "8px" }}>
                       {/* Logo & Name are now displayed at the top */}
                       <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "center", lineHeight: "1.4" }}>
-                        {selectedOrder.tenant?.receiptAddressString && (
+                        {(selectedOrder.tenant?.receiptAddressString || selectedOrder.tenant?.address) && (
                           <div style={{ marginBottom: "2px" }}>
-                            Address: {selectedOrder.tenant.receiptAddressString}
+                            Address: {selectedOrder.tenant.receiptAddressString || selectedOrder.tenant.address}
                           </div>
                         )}
-                        {selectedOrder.tenant?.receiptWhatsAppString && (
+                        {(selectedOrder.tenant?.receiptWhatsAppString || selectedOrder.tenant?.phone) && (
                           <div style={{ marginBottom: "4px" }}>
-                            WhatsApp: {selectedOrder.tenant.receiptWhatsAppString}
+                            Phone: {selectedOrder.tenant.receiptWhatsAppString || selectedOrder.tenant.phone}
                           </div>
                         )}
                         {selectedOrder.tenant?.ntn && (

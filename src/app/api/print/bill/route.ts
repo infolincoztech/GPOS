@@ -58,9 +58,17 @@ export async function POST(req: NextRequest) {
     let data = "";
     data += initialize;
 
-    // Header - Business Name
-    data += alignCenter + fontLarge + boldOn + (order.tenant.name || "JOSAN FOODS").toUpperCase() + "\n" + fontNormal + boldOff;
-    
+    // Header - Business Name, Address & Phone
+    data += alignCenter + fontLarge + boldOn + (order.tenant.name || "GENERAL STORE").toUpperCase() + "\n" + fontNormal + boldOff;
+    const headerAddress = order.tenant.receiptAddressString || order.tenant.address;
+    const headerPhone = order.tenant.receiptWhatsAppString || order.tenant.phone;
+    if (headerAddress) {
+      data += headerAddress + "\n";
+    }
+    if (headerPhone) {
+      data += "Ph: " + headerPhone + "\n";
+    }
+
     // Receipt Label
     data += boldOn + "RECEIPT\n" + boldOff;
     data += alignLeft;

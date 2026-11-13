@@ -44,6 +44,9 @@ export default function SettingsPage() {
   });
 
   const [businessForm, setBusinessForm] = useState({
+    name: "",
+    phone: "",
+    address: "",
     ntn: "",
     strn: "",
     cashTaxRate: 16,
@@ -67,22 +70,26 @@ export default function SettingsPage() {
         setUser(res.data);
         setProfileForm({ name: res.data.name || "", phone: res.data.phone || "" });
         if (res.data.tenant) {
+          const t = res.data.tenant;
           setBusinessForm({
-            ntn: res.data.tenant.ntn || "",
-            strn: res.data.tenant.strn || "",
-            cashTaxRate: res.data.tenant.cashTaxRate ?? 16,
-            cardTaxRate: res.data.tenant.cardTaxRate ?? 5,
-            logoUrl: res.data.tenant.logoUrl || "",
-            receiptWhatsAppString: res.data.tenant.receiptWhatsAppString || "",
-            receiptAddressString: res.data.tenant.receiptAddressString || "",
-            receiptRaastString: res.data.tenant.receiptRaastString || "",
-            receiptBankString: res.data.tenant.receiptBankString || "",
-            receiptEasyPaisaString: res.data.tenant.receiptEasyPaisaString || "",
-            receiptJazzCashString: res.data.tenant.receiptJazzCashString || "",
-            kitchenPrinterIp: res.data.tenant.kitchenPrinterIp || "",
-            kitchenPrinterPort: res.data.tenant.kitchenPrinterPort ?? 9100,
-            cashierPrinterIp: res.data.tenant.cashierPrinterIp || "",
-            cashierPrinterPort: res.data.tenant.cashierPrinterPort ?? 9100,
+            name: t.name || "",
+            phone: t.receiptWhatsAppString || t.phone || "",
+            address: t.receiptAddressString || t.address || "",
+            ntn: t.ntn || "",
+            strn: t.strn || "",
+            cashTaxRate: t.cashTaxRate ?? 16,
+            cardTaxRate: t.cardTaxRate ?? 5,
+            logoUrl: t.logoUrl || "",
+            receiptWhatsAppString: t.receiptWhatsAppString || t.phone || "",
+            receiptAddressString: t.receiptAddressString || t.address || "",
+            receiptRaastString: t.receiptRaastString || "",
+            receiptBankString: t.receiptBankString || "",
+            receiptEasyPaisaString: t.receiptEasyPaisaString || "",
+            receiptJazzCashString: t.receiptJazzCashString || "",
+            kitchenPrinterIp: t.kitchenPrinterIp || "",
+            kitchenPrinterPort: t.kitchenPrinterPort ?? 9100,
+            cashierPrinterIp: t.cashierPrinterIp || "",
+            cashierPrinterPort: t.cashierPrinterPort ?? 9100,
           });
         }
       })
@@ -231,30 +238,173 @@ export default function SettingsPage() {
         <TabsContent value="business">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">Business & Financial Settings</h3>
-            <div className="space-y-8 max-w-2xl">
-              <div className="p-5 rounded-2xl bg-amber-50 border border-amber-100 flex items-start gap-4">
-                <CheckCircle2 className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-black text-amber-900">Important Note for Business Details</p>
-                  <p className="text-sm font-medium text-amber-700 mt-1">
-                    Core business details (Name, Email, Phone, Address) are managed by Super Admin. For compliance and FBR integration, you can configure your tax identifiers and receipt payment labels below.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-6 border-b border-slate-100">
-                {[
-                  { label: "Business Name", value: user?.tenant?.name },
-                  { label: "Business Email", value: user?.tenant?.email },
-                  { label: "Phone", value: user?.tenant?.phone },
-                  { label: "Address", value: user?.tenant?.address },
-                ].map((field) => (
-                  <div key={field.label} className="space-y-2">
-                    <Label className="font-bold text-slate-700">{field.label}</Label>
-                    <Input className="h-14 rounded-2xl bg-slate-50 text-slate-500 font-medium px-5" value={field.value || "—"} disabled />
+            <h3 className="text-xl font-bold text-slate-900 mb-6">Business Profile & Receipt Branding</h3>
+            <div className="space-y-8 max-w-4xl">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 pb-6 border-b border-slate-100">
+                <div className="lg:col-span-3 space-y-5">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Name (Printed on Receipt)</Label>
+                    <Input
+                      className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-bold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                      placeholder="e.g. Al-Madina General Store"
+                      value={businessForm.name}
+                      onChange={(e) => setBusinessForm({ ...businessForm, name: e.target.value })}
+                    />
                   </div>
-                ))}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-700">Phone / WhatsApp Number (Receipt)</Label>
+                      <Input
+                        className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-semibold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                        placeholder="e.g. +92 300 1234567"
+                        value={businessForm.phone}
+                        onChange={(e) =>
+                          setBusinessForm({
+                            ...businessForm,
+                            phone: e.target.value,
+                            receiptWhatsAppString: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-slate-700">Business Email</Label>
+                      <Input
+                        className="h-14 rounded-2xl bg-slate-50 text-slate-500 font-medium px-5"
+                        value={user?.tenant?.email || user?.email || "—"}
+                        disabled
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Address (Printed on Receipt)</Label>
+                    <Input
+                      className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-semibold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                      placeholder="e.g. Shop 4, Main Boulevard, Phase 5 DHA, Lahore"
+                      value={businessForm.address}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          address: e.target.value,
+                          receiptAddressString: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Logo (Printed on Receipt)</Label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
+                      <div className="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden relative shrink-0">
+                        {businessForm.logoUrl ? (
+                          <img src={businessForm.logoUrl} className="w-full h-full object-contain" alt="Logo Preview" />
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-bold font-sans">No Logo</span>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <div className="relative inline-block">
+                          <label className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs inline-flex items-center justify-center cursor-pointer shadow-sm active:scale-95 transition-all">
+                            Upload Logo (PNG/JPG)
+                            <input
+                              type="file"
+                              accept="image/png, image/jpeg, image/jpg, image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                e.target.value = "";
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => {
+                                    const dataUrl = ev.target?.result as string;
+                                    const img = new Image();
+                                    img.onload = () => {
+                                      const canvas = document.createElement("canvas");
+                                      const maxSize = 240;
+                                      let { width, height } = img;
+                                      if (width > height) {
+                                        if (width > maxSize) {
+                                          height = Math.round((height * maxSize) / width);
+                                          width = maxSize;
+                                        }
+                                      } else {
+                                        if (height > maxSize) {
+                                          width = Math.round((width * maxSize) / height);
+                                          height = maxSize;
+                                        }
+                                      }
+                                      canvas.width = width;
+                                      canvas.height = height;
+                                      const ctx = canvas.getContext("2d");
+                                      if (ctx) {
+                                        ctx.drawImage(img, 0, 0, width, height);
+                                        setBusinessForm((prev) => ({
+                                          ...prev,
+                                          logoUrl: canvas.toDataURL("image/png", 0.9),
+                                        }));
+                                      } else {
+                                        setBusinessForm((prev) => ({ ...prev, logoUrl: dataUrl }));
+                                      }
+                                    };
+                                    img.src = dataUrl;
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-semibold font-sans">
+                          Automatically optimized for thermal receipt printing.
+                        </p>
+                      </div>
+                      {businessForm.logoUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-10 px-3 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50 font-bold text-xs"
+                          onClick={() => setBusinessForm((prev) => ({ ...prev, logoUrl: "" }))}
+                        >
+                          Remove Logo
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Receipt Header Preview */}
+                <div className="lg:col-span-2 flex flex-col">
+                  <Label className="font-bold text-slate-700 mb-2">Live Receipt Preview</Label>
+                  <div className="flex-1 rounded-2xl bg-slate-50 border border-slate-200 p-4 flex items-center justify-center">
+                    <div className="bg-white border border-slate-200 shadow-sm p-5 w-full max-w-[270px] font-mono text-black text-center">
+                      {businessForm.logoUrl ? (
+                        <img
+                          src={businessForm.logoUrl}
+                          alt="Receipt Logo"
+                          className="max-w-[72px] max-h-[72px] mx-auto mb-2 object-contain block"
+                        />
+                      ) : null}
+                      <div className="font-black text-sm uppercase tracking-tight">
+                        {businessForm.name || "YOUR BUSINESS NAME"}
+                      </div>
+                      {(businessForm.address || businessForm.receiptAddressString) && (
+                        <div className="text-[10px] font-bold text-slate-700 mt-1 leading-tight">
+                          {businessForm.address || businessForm.receiptAddressString}
+                        </div>
+                      )}
+                      {(businessForm.phone || businessForm.receiptWhatsAppString) && (
+                        <div className="text-[10px] font-bold text-slate-700 mt-0.5">
+                          Ph: {businessForm.phone || businessForm.receiptWhatsAppString}
+                        </div>
+                      )}
+                      <div className="border-t border-dashed border-black my-2.5" />
+                      <div className="text-[10px] font-bold uppercase">CASH RECEIPT</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">Order #: 101 • PAID</div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -287,65 +437,6 @@ export default function SettingsPage() {
                     <Label className="font-bold text-slate-700">Card Tax Percentage</Label>
                     <Input type="number" step="0.1" className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-bold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all" placeholder="e.g. 5" value={businessForm.cardTaxRate} onChange={e => setBusinessForm({...businessForm, cardTaxRate: parseFloat(e.target.value) || 0})} />
                     <p className="text-xs text-slate-400 font-medium">Discounted FBR tax rate applied to card payments.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-lg font-bold text-slate-900 mb-4">Receipt Customization</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Business Logo (PNG/JPG)</Label>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
-                      <div className="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden relative shrink-0">
-                        {businessForm.logoUrl ? (
-                          <img src={businessForm.logoUrl} className="w-full h-full object-contain" alt="Logo Preview" />
-                        ) : (
-                          <span className="text-[10px] text-slate-400 font-bold font-sans">No Logo</span>
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <div className="relative inline-block">
-                          <label className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs inline-flex items-center justify-center cursor-pointer shadow-sm active:scale-95 transition-all">
-                            Upload PNG/JPG
-                            <input 
-                              type="file" 
-                              accept="image/png, image/jpeg, image/jpg" 
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setBusinessForm(prev => ({ ...prev, logoUrl: reader.result as string }));
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                            />
-                          </label>
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-semibold font-sans">Direct upload. Max size 2MB. Recommended dimensions: square.</p>
-                      </div>
-                      {businessForm.logoUrl && (
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          className="h-10 px-3 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50 font-bold text-xs"
-                          onClick={() => setBusinessForm(prev => ({ ...prev, logoUrl: "" }))}
-                        >
-                          Remove Logo
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">WhatsApp Number</Label>
-                    <Input className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-semibold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all" placeholder="e.g. +92 300 1234567" value={businessForm.receiptWhatsAppString} onChange={e => setBusinessForm({...businessForm, receiptWhatsAppString: e.target.value})} />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label className="font-bold text-slate-700">Custom Address for Receipts</Label>
-                    <Input className="h-14 rounded-2xl bg-white border-slate-200 px-5 font-semibold focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all" placeholder="e.g. Shop 4, Phase 5 DHA, Lahore" value={businessForm.receiptAddressString} onChange={e => setBusinessForm({...businessForm, receiptAddressString: e.target.value})} />
                   </div>
                 </div>
               </div>
