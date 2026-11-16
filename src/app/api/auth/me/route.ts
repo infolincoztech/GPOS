@@ -9,7 +9,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "licoz_pos_jwt_super_secret_2026_xK
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
+    const cookieToken = req.cookies.get("token")?.value;
+    const headerToken =
+      req.headers.get("x-auth-token") ||
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const token = cookieToken || headerToken;
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,12 +23,32 @@ export async function GET(req: NextRequest) {
     const cacheKey = `user:${decoded.id}`;
     const cachedUser = getCached<any>(cacheKey);
 
+    const attachCookieIfNeeded = (res: NextResponse) => {
+      if (!cookieToken && token) {
+        const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+        const isHttps =
+          req.nextUrl.protocol === "https:" ||
+          req.headers.get("x-forwarded-proto") === "https";
+        res.cookies.set("token", token, {
+          httpOnly: true,
+          secure: isHttps,
+          sameSite: "lax",
+          path: "/",
+          maxAge: ONE_YEAR_SECONDS,
+          expires: new Date(Date.now() + ONE_YEAR_SECONDS * 1000),
+        });
+      }
+      return res;
+    };
+
     if (cachedUser) {
-      return NextResponse.json({
-        ...cachedUser,
-        isImpersonated: Boolean(decoded.isImpersonated),
-        impersonatorEmail: decoded.impersonatorEmail || null,
-      });
+      return attachCookieIfNeeded(
+        NextResponse.json({
+          ...cachedUser,
+          isImpersonated: Boolean(decoded.isImpersonated),
+          impersonatorEmail: decoded.impersonatorEmail || null,
+        })
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -61,11 +85,13 @@ export async function GET(req: NextRequest) {
 
     setCached(cacheKey, userPayload, 60000);
 
-    return NextResponse.json({
-      ...userPayload,
-      isImpersonated: Boolean(decoded.isImpersonated),
-      impersonatorEmail: decoded.impersonatorEmail || null,
-    });
+    return attachCookieIfNeeded(
+      NextResponse.json({
+        ...userPayload,
+        isImpersonated: Boolean(decoded.isImpersonated),
+        impersonatorEmail: decoded.impersonatorEmail || null,
+      })
+    );
   } catch (error) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }

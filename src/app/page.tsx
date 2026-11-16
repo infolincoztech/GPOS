@@ -8,8 +8,9 @@ import {
   Smartphone, Clock, Building2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const fadeUp = { hidden: { y: 30, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { duration: 0.6 } } };
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.12 } } };
@@ -17,6 +18,29 @@ const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.12 } }
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const savedToken =
+      typeof window !== "undefined" ? localStorage.getItem("gpos_auth_token") : null;
+    fetch("/api/auth/me", {
+      method: "GET",
+      headers: savedToken ? { "x-auth-token": savedToken } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (user && user.id) {
+          if (user.role === "SUPER_ADMIN" && !user.isImpersonated) {
+            router.replace("/admin-dashboard");
+          } else if (user.role === "CASHIER") {
+            router.replace("/dashboard/pos");
+          } else {
+            router.replace("/dashboard");
+          }
+        }
+      })
+      .catch(() => {});
+  }, [router]);
 
   const features = [
     { icon: ShoppingBag, title: "Smart POS Terminal", desc: "Lightning-fast billing with barcode scanning, cash/card/UPI payments, and instant receipt printing." },

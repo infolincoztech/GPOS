@@ -109,9 +109,13 @@ export default function TenantLayout({
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("gpos_auth_token");
+        localStorage.removeItem("gpos_user_role");
+      }
       await axios.post("/api/auth/logout");
       toast.success("Logged out successfully");
-      router.push("/login");
+      router.replace("/login");
     } catch {
       toast.error("Logout failed");
     }

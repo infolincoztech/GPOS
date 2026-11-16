@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "next dev -H 0.0.0.0",
-    "build": "npx prisma generate && next build",
-    "start": "next start -H 0.0.0.0",
+    "dev": "node init && next dev -H 0.0.0.0",
+    "build": "node init && npx prisma generate && next build",
+    "start": "node init && next start -H 0.0.0.0",
     "lint": "eslint",
     "mobile:init": "npx @capacitor/cli add android && npx @capacitor/cli add ios",
     "mobile:sync": "npx @capacitor/cli sync",

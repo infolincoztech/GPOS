@@ -3,10 +3,17 @@
 import React, { useEffect } from "react";
 import { syncOfflineOrders } from "@/lib/mobile-bridge";
 import { toast } from "sonner";
+import axios from "axios";
 
 export function MobileAppShell() {
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // 0. Restore persistent auth header from localStorage if present
+    const savedToken = localStorage.getItem("gpos_auth_token");
+    if (savedToken) {
+      axios.defaults.headers.common["x-auth-token"] = savedToken;
+    }
 
     // 1. Register Offline-Resilient Service Worker
     if ("serviceWorker" in navigator) {
