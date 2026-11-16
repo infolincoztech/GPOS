@@ -29,8 +29,37 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get("token")?.value;
   const { pathname } = request.nextUrl;
 
+  const isAuthEntryRoute = pathname === "/" || pathname === "/login";
   const isAdminRoute = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
   const isDashboardRoute = pathname.startsWith("/dashboard");
+
+  // If user opens "/" or "/login" while already logged in, keep them logged in and redirect to their dashboard
+  if (isAuthEntryRoute) {
+    if (!token) {
+      return NextResponse.next();
+    }
+    try {
+      const secret = new TextEncoder().encode(JWT_SECRET);
+      const { payload } = await jwtVerify(token, secret);
+      const role = payload.role as string;
+      const status = payload.status as string;
+      const isImpersonated = Boolean(payload.isImpersonated);
+
+      if (status && status !== "ACTIVE") {
+        return NextResponse.next();
+      }
+
+      if (role === "SUPER_ADMIN" && !isImpersonated) {
+        return NextResponse.redirect(new URL("/admin-dashboard", request.url));
+      }
+      if (role === "CASHIER") {
+        return NextResponse.redirect(new URL("/dashboard/pos", request.url));
+      }
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    } catch {
+      return NextResponse.next();
+    }
+  }
 
   if (!isAdminRoute && !isDashboardRoute) {
     return NextResponse.next();
@@ -93,6 +122,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
+    "/login",
     "/admin-dashboard/:path*",
     "/tenants/:path*",
     "/modules/:path*",

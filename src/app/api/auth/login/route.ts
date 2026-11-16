@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
         modules: user.tenant?.modules?.map((tm: any) => tm.module.name) || [],
       },
       JWT_SECRET!,
-      { expiresIn: "1d" }
+      { expiresIn: "365d" }
     );
 
     const userPayload = {
@@ -153,6 +155,7 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       user: userPayload,
+      token,
     });
 
     const isHttps =
@@ -164,7 +167,8 @@ export async function POST(req: NextRequest) {
       secure: isHttps,
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24,
+      maxAge: ONE_YEAR_SECONDS,
+      expires: new Date(Date.now() + ONE_YEAR_SECONDS * 1000),
     });
 
     return response;

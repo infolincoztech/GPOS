@@ -17,9 +17,27 @@ export default function LoginPage() {
   const router = useRouter();
 
   React.useEffect(() => {
-    // Pre-warm server & DB connection while user types credentials
-    fetch("/api/auth/me", { method: "GET" }).catch(() => {});
-  }, []);
+    // Check if user already has an active or persistent session; if so, auto-redirect to dashboard
+    const savedToken =
+      typeof window !== "undefined" ? localStorage.getItem("gpos_auth_token") : null;
+    fetch("/api/auth/me", {
+      method: "GET",
+      headers: savedToken ? { "x-auth-token": savedToken } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (user && user.id) {
+          if (user.role === "SUPER_ADMIN" && !user.isImpersonated) {
+            router.replace("/admin-dashboard");
+          } else if (user.role === "CASHIER") {
+            router.replace("/dashboard/pos");
+          } else {
+            router.replace("/dashboard");
+          }
+        }
+      })
+      .catch(() => {});
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,13 +46,19 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await axios.post("/api/auth/login", { email, password });
+      if (typeof window !== "undefined" && res.data?.token) {
+        localStorage.setItem("gpos_auth_token", res.data.token);
+        localStorage.setItem("gpos_user_role", res.data.user?.role || "");
+      }
       toast.success("Welcome back, " + res.data.user.name);
       
       // Redirect based on role
       if (res.data.user.role === "SUPER_ADMIN") {
-        router.push("/admin-dashboard");
+        router.replace("/admin-dashboard");
+      } else if (res.data.user.role === "CASHIER") {
+        router.replace("/dashboard/pos");
       } else {
-        router.push("/dashboard");
+        router.replace("/dashboard");
       }
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Login failed. Please check your credentials.");

@@ -4,7 +4,11 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "licoz_pos_jwt_super_secret_2026_xK9mP3qR7vN2wL8";
 
 export function getAuthUser(req: NextRequest): any | null {
-  const token = req.cookies.get("token")?.value;
+  const cookieToken = req.cookies.get("token")?.value;
+  const headerToken =
+    req.headers.get("x-auth-token") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const token = cookieToken || headerToken;
   if (!token) return null;
   try {
     return jwt.verify(token, JWT_SECRET) as any;
